@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 import os
 import sys
@@ -8,6 +8,7 @@ import subprocess
 import multiprocessing as mp
 import shlex
 from collections import Counter
+import Tool_Box
 
 
 def parsing_arguments():
@@ -51,6 +52,7 @@ def parsing_arguments():
 
     if not os.path.isfile(args.SOLVER):
         raise ValueError(error("Solver not found in {}!".format(args.SOLVER)))
+
     clusters = args.input + '.seg'
     if not os.path.isfile(clusters):
         raise ValueError(error("SEG file {} not found!".format(clusters)))
@@ -73,15 +75,16 @@ def parsing_arguments():
     if ln < 2:
         raise ValueError(error("The lower bound in the number of clones must be greater or equal than 2!"))
 
-    if args.cnstates != None and args.cnstates <= 0:
-        raise ValueError(error("The maximum number of copy-number states should be default None or a positive non-zero integer!"))
+    if args.cnstates and args.cnstates <= 0:
+        raise ValueError(error("The maximum number of copy-number states should be default None or a positive non-zero"
+                               " integer!"))
     if args.diploidcmax == 0:
         args.diploidcmax = None
-    if args.diploidcmax != None and args.diploidcmax <= 0:
+    if args.diploidcmax and args.diploidcmax <= 0:
         raise ValueError(error("The maximum diploid copy number a positive non-zero integer!"))
     if args.tetraploidcmax == 0:
         args.tetraploidcmax = None
-    if args.tetraploidcmax != None and args.tetraploidcmax <= 0:
+    if args.tetraploidcmax and args.tetraploidcmax <= 0:
         raise ValueError(error("The maximum tetraploid copy number a positive non-zero integer!"))
     if args.minsize < 0.0 or args.minsize > 1.0:
         raise ValueError(error("The genome-size proportions for potential clonal clusters must be in [0, 1]!"))
@@ -105,18 +108,18 @@ def parsing_arguments():
         raise ValueError(error("The number of seeds should be a positive non-zero integer"))
     if args.jobs is not None and args.jobs <= 0:
         raise ValueError(error("The number of jobs should be a positive non-zero integer"))
-    if args.randomseed != None and args.randomseed <= 0:
+    if args.randomseed and args.randomseed <= 0:
         raise ValueError(error("The random seed should be a positive non-zero integer or default None!"))
-    if args.timelimit != None and args.timelimit <= 0:
+    if args.timelimit and args.timelimit <= 0:
         raise ValueError(error("The time limit should be a positive non-zero integer or default None!"))
-    if args.memlimit != None and args.memlimit <= 0:
+    if args.memlimit and args.memlimit <= 0:
         raise ValueError(error("The memory limit should be a positive non-zero integer or default None!"))
-    if args.minprop != None and (args.minprop < 0 or args.minprop > 0.3):
+    if args.minprop and (args.minprop < 0 or args.minprop > 0.3):
         raise ValueError(error("The minimum proportion of clones on each sample must be in [0, 0.3]"))
-    if args.maxiterations != None and args.maxiterations < 0:
+    if args.maxiterations and args.maxiterations < 0:
         raise ValueError(error("The max-iteration number must be a positive integer!"))
-    if args.mode != None and (args.mode != 0 and args.mode != 1 and args.mode != 2):
-        raise ValueError(error("The mode integer must be in \{0, 1, 2\}!"))
+    if args.mode and (args.mode != 0 and args.mode != 1 and args.mode != 2):
+        raise ValueError(error("The mode integer must be in /{0, 1, 2/}!"))
 
     if args.diploid and args.tetraploid:
         raise ValueError(error("Diploid and tetraploid cannot be forced at the same time!"))
@@ -126,38 +129,38 @@ def parsing_arguments():
     if not 0 <= args.verbosity <= 3:
         raise ValueError(error("The verbosity level must be a value within 0,1,2,3!"))
 
-    return {"solver" : args.SOLVER,
-            "input" : args.input,
-            "seg" : clusters,
-            "bbc" : bbc,
-            "ln" : ln,
-            "un" : un,
-            "clonal" : args.clonal,
-            "ampdel" : not args.noampdel,
-            "d" : args.cnstates,
-            "eD" : args.diploidcmax,
-            "eT" : args.tetraploidcmax,
-            "ts" : args.minsize,
-            "tc" : args.minchrs,
-            "td" : args.maxneutralshift,
-            "tR" : args.toleranceRDR,
-            "tB" : args.toleranceBAF,
-            "mR" : args.mergeRDR,
-            "mB" : args.mergeBAF,
-            "limit" : args.limitinc,
-            "g" : args.ghostprop,
-            "p" : args.seeds,
-            "j" : args.jobs,
-            "r" : args.randomseed,
-            "s" : args.timelimit,
-            "m" : args.memlimit,
-            "u" : args.minprop,
-            "f" : args.maxiterations,
-            "M" : args.mode,
-            "x" : args.runningdir,
-            "diploid" : args.diploid,
-            "tetraploid" : args.tetraploid,
-            "v" : args.verbosity}
+    return {"solver": args.SOLVER,
+            "input": args.input,
+            "seg": clusters,
+            "bbc": bbc,
+            "ln": ln,
+            "un": un,
+            "clonal": args.clonal,
+            "ampdel": not args.noampdel,
+            "d": args.cnstates,
+            "eD": args.diploidcmax,
+            "eT": args.tetraploidcmax,
+            "ts": args.minsize,
+            "tc": args.minchrs,
+            "td": args.maxneutralshift,
+            "tR": args.toleranceRDR,
+            "tB": args.toleranceBAF,
+            "mR": args.mergeRDR,
+            "mB": args.mergeBAF,
+            "limit": args.limitinc,
+            "g": args.ghostprop,
+            "p": args.seeds,
+            "j": args.jobs,
+            "r": args.randomseed,
+            "s": args.timelimit,
+            "m": args.memlimit,
+            "u": args.minprop,
+            "f": args.maxiterations,
+            "M": args.mode,
+            "x": args.runningdir,
+            "diploid": args.diploid,
+            "tetraploid": args.tetraploid,
+            "v": args.verbosity}
 
 
 def main():
@@ -179,7 +182,8 @@ def main():
     size = computeSizes(seg=seg, bbc=bbc, samples=samples)
 
     sys.stderr.write(log("# Filtering clusters based on covered genome size and covered chromosomes\n"))
-    fbbc, fseg = filtering(bbc=bbc, seg=seg, size=size, ts=args["ts"], tc=args["tc"], mB=args["mB"], mR=args["mR"], samples=samples, v=args["v"])
+    fbbc, fseg = filtering(bbc=bbc, seg=seg, size=size, ts=args["ts"], tc=args["tc"], mB=args["mB"], mR=args["mR"],
+                           samples=samples, v=args["v"])
 
     sys.stderr.write(log("# Finding the neutral diploid/tetraploid cluster\n"))
     neutral = findNeutralCluster(seg=fseg, size=size, td=args["td"], samples=samples, v=args["v"])
@@ -189,20 +193,31 @@ def main():
         diploidObjs = runningDiploid(neutral=neutral, args=args)
 
         if args['clonal'] is None:
-    	    sys.stderr.write(log("# Finding clonal clusters and their copy numbers\n"))
-    	    clonal, scale = findClonalClusters(fseg=fseg, neutral=neutral, size=size, tB=args['tB'], tR=args['tR'], samples=samples, v=args['v'])
+            sys.stderr.write(log("# Finding clonal clusters and their copy numbers\n"))
+            clonal, scale = findClonalClusters(fseg=fseg, neutral=neutral, size=size, tB=args['tB'], tR=args['tR'],
+                                               samples=samples, v=args['v'])
         else:
-    	    sys.stderr.write(log("# Parsing given clonal copy numbers\n"))
-            clonal, scale = parseClonalClusters(clonal=args['clonal'], fseg=fseg, neutral=neutral, size=size, samples=samples, v=args['v'])
+            sys.stderr.write(log("# Parsing given clonal copy numbers\n"))
+            clonal, scale = parseClonalClusters(clonal=args['clonal'], fseg=fseg, neutral=neutral, size=size,
+                                                samples=samples, v=args['v'])
 
-    	if len(clonal) > 0:
+        if len(clonal) > 0:
             sys.stderr.write(log("# Running tetraploid\n"))
             tetraploidObjs = runningTetraploid(clonal=clonal, scale=scale, size=size, args=args)
 
             sys.stderr.write(log("# Selecting best solution\n"))
-            select(diploid=diploidObjs, tetraploid=tetraploidObjs, v=args['v'], rundir=args['x'], g=args["g"], limit=args['limit'])
+            select(diploid=diploidObjs, tetraploid=tetraploidObjs, v=args['v'], rundir=args['x'], g=args["g"],
+                   limit=args['limit'])
         else:
-            sys.stderr.write(warning("# No potential clonal patterns found, the input is likely to be diploid.\n If the heuristic failed to identify a clonal cluster due to high noisy in the data, there are two main parameters which user may tune:\n\t1. Increase the values of tB and tR which define the thresholds to predict the RDR and BAF of clonal clusters.\n\t2. Decrease the value of -ts which define the minimum coverage of the genome for clusters to be considered potentially clonal. As such, more clusters will be considered. \nLast, please assess the quality of the clustering through cluBB and increase the corresponding thresholds (-tR and -tB) to avoid overfitting of the data and overclustering.\n"))
+            sys.stderr.write(warning("# No potential clonal patterns found, the input is likely to be diploid.\n "
+                                     "If the heuristic failed to identify a clonal cluster due to high noisy in the "
+                                     "data, there are two main parameters which user may tune:\n\t1. Increase the "
+                                     "values of tB and tR which define the thresholds to predict the RDR and BAF of "
+                                     "clonal clusters.\n\t2. Decrease the value of -ts which define the minimum "
+                                     "coverage of the genome for clusters to be considered potentially clonal. As such,"
+                                     " more clusters will be considered. \nLast, please assess the quality of the "
+                                     "clustering through cluBB and increase the corresponding thresholds (-tR and -tB) "
+                                     "to avoid overfitting of the data and overclustering.\n"))
 
             sys.stderr.write(log("# Selecting best diploid solution\n"))
             selectDiploid(diploid=diploidObjs, v=args['v'], rundir=args['x'], g=args["g"], limit=args['limit'])
@@ -215,24 +230,32 @@ def main():
         selectDiploid(diploid=diploidObjs, v=args['v'], rundir=args['x'], g=args["g"], limit=args['limit'])
 
     elif args['tetraploid']:
-        if args['clonal'] is None:
-    	    sys.stderr.write(log("# Finding clonal clusters and their copy numbers\n"))
-    	    clonal, scale = findClonalClusters(fseg=fseg, neutral=neutral, size=size, tB=args['tB'], tR=args['tR'], samples=samples, v=args['v'])
+        if not args['clonal']:
+            sys.stderr.write(log("# Finding clonal clusters and their copy numbers\n"))
+            clonal, scale = findClonalClusters(fseg=fseg, neutral=neutral, size=size, tB=args['tB'], tR=args['tR'],
+                                               samples=samples, v=args['v'])
         else:
-    	    sys.stderr.write(log("# Parsing given clonal copy numbers\n"))
-            clonal, scale = parseClonalClusters(clonal=args['clonal'], fseg=fseg, neutral=neutral, size=size, samples=samples, v=args['v'])
+            sys.stderr.write(log("# Parsing given clonal copy numbers\n"))
+            clonal, scale = parseClonalClusters(clonal=args['clonal'], fseg=fseg, neutral=neutral, size=size,
+                                                samples=samples, v=args['v'])
 
-    	if len(clonal) > 0:
+        if len(clonal) > 0:
             sys.stderr.write(log("# Running tetraploid\n"))
             tetraploidObjs = runningTetraploid(clonal=clonal, scale=scale, size=size, args=args)
 
             sys.stderr.write(log("# Selecting best tetraploid solution\n"))
             selectTetraploid(tetraploid=tetraploidObjs, v=args['v'], rundir=args['x'], g=args["g"], limit=args['limit'])
         else:
-            sys.stderr.write(warning("# No potential clonal patterns found, the input is likely to be diploid.\n If the heuristic failed to identify a clonal cluster due to high noisy in the data, there are two main parameters which user may tune:\n\t1. Increase the values of tB and tR which define the thresholds to predict the RDR and BAF of clonal clusters.\n\t2. Decrease the value of -ts which define the minimum coverage of the genome for clusters to be considered potentially clonal. As such, more clusters will be considered. \nLast, please assess the quality of the clustering through cluBB and increase the corresponding thresholds (-tR and -tB) to avoid overfitting of the data and overclustering.\n"))
+            sys.stderr.write(warning("# No potential clonal patterns found, the input is likely to be diploid.\n "
+                                     "If the heuristic failed to identify a clonal cluster due to high noisy in the "
+                                     "data, there are two main parameters which user may tune:\n\t"
+                                     "1. Increase the values of tB and tR which define the thresholds to predict the "
+                                     "RDR and BAF of clonal clusters.\n\t2. Decrease the value of -ts which define the "
+                                     "minimum coverage of the genome for clusters to be considered potentially clonal. "
+                                     "As such, more clusters will be considered. \nLast, please assess the quality of "
+                                     "the clustering through cluBB and increase the corresponding thresholds (-tR and "
+                                     "-tB) to avoid overfitting of the data and overclustering.\n"))
             
-
-
 
 def readBBC(filename):
     samples = set()
@@ -315,11 +338,12 @@ def filtering(bbc, seg, size, ts, tc, mB, mR, samples, v):
     totsize = float(sum(seg[1]-seg[0] for c in bbc for seg in bbc[c]))
     chrs = {idx : set(c for c in bbc for seg in bbc[c] if bbc[c][seg][sample]['cluster'] == idx) for idx in seg}
     assert sum(size[idx] for idx in size) == totsize
-    printrdrbaf = (lambda s : '-'.join(['({}, {})'.format(seg[s][p]['rdr'], seg[s][p]['baf']) for p in samples]))
+    printrdrbaf = (lambda s: '-'.join(['({}, {})'.format(seg[s][p]['rdr'], seg[s][p]['baf']) for p in samples]))
 
     if v >= 3:
         sys.stderr.write(debug("### Clusters and their features:\n"))
-        #sys.stderr.write(debug('\n'.join(['### {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}'.format(idx, size[idx], len(chrs[idx]), printrdrbaf(idx)) for idx in seg]) + '\n'))
+        # sys.stderr.write(debug('\n'.join(['### {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}'.format(idx, size[idx],
+        # len(chrs[idx]), printrdrbaf(idx)) for idx in seg]) + '\n'))
 
     selected = set(idx for idx in seg)
     merge_selected = set()
@@ -332,12 +356,14 @@ def filtering(bbc, seg, size, ts, tc, mB, mR, samples, v):
         if merge is None:
             merge_selected.add(idx)
             if v >= 3:
-                sys.stderr.write(debug('### {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}\n'.format(idx, size[idx], len(chrs[idx]), printrdrbaf(idx))))
+                sys.stderr.write(debug('### {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}\n'
+                                       .format(idx, size[idx], len(chrs[idx]), printrdrbaf(idx))))
         else:
             size[merge] += size[idx]
             chrs[merge] = chrs[merge] | chrs[idx]
             if v >= 3:
-                sys.stderr.write(warning('### {} merged with {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}\n'.format(idx, merge, size[idx], len(chrs[idx]), printrdrbaf(idx))))
+                sys.stderr.write(warning('### {} merged with {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}\n'
+                                         .format(idx, merge, size[idx], len(chrs[idx]), printrdrbaf(idx))))
     selected = merge_selected
 
     selected = set(idx for idx in selected if size[idx] >= totsize * ts and len(chrs[idx]) >= tc)
@@ -349,7 +375,8 @@ def filtering(bbc, seg, size, ts, tc, mB, mR, samples, v):
         sys.stderr.write(info("# Selected clusters: " + ", ".join([idx for idx in selected]) + '\n'))
     if v >= 2:
         sys.stderr.write(info("## Features of selected clusters:\n"))
-        sys.stderr.write(info('\n'.join(['## {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}'.format(idx, size[idx], len(chrs[idx]), printrdrbaf(idx)) for idx in selected]) + '\n'))
+        sys.stderr.write(info('\n'.join(['## {}: SIZE= {}\t#CHRS= {}\t(RDR, BAF)= {}'
+                                        .format(idx, size[idx], len(chrs[idx]), printrdrbaf(idx)) for idx in selected]) + '\n'))
 
 
     return fbbc, fseg
@@ -411,8 +438,8 @@ def makeBaseCMD(args, e):
 
 
 def findClonalClusters(fseg, neutral, size, tB, tR, samples, v):
-    topbaf = {p : float(min(fseg[idx][p]['avgbaf'] for idx in fseg)) for p in samples}
-    heigh = {p : (abs(fseg[neutral][p]['avgbaf'] - topbaf[p]) / 4.0) > tB for p in samples}
+    topbaf = {p: float(min(fseg[idx][p]['avgbaf'] for idx in fseg)) for p in samples}
+    heigh = {p: (abs(fseg[neutral][p]['avgbaf'] - topbaf[p]) / 4.0) > tB for p in samples}
 
     location = {}
     level = {}
@@ -424,7 +451,7 @@ def findClonalClusters(fseg, neutral, size, tB, tR, samples, v):
             t = topbaf[p]
             n = fseg[neutral][p]['avgbaf']
             x = fseg[idx][p]['avgbaf']
-            d = {'top' : abs(t - x), 'mid' : abs(((t + n)/2.0) - x), 'midbot' : abs(((t + 3*n)/4.0) - x), 'bot' : abs(n - x)}
+            d = {'top': abs(t - x), 'mid': abs(((t + n)/2.0) - x), 'midbot': abs(((t + 3*n)/4.0) - x), 'bot': abs(n - x)}
             
             if d['top'] < d['bot'] and abs(d['top'] - d['bot']) > tB:
                 levp[p] = ['top']
@@ -455,7 +482,7 @@ def findClonalClusters(fseg, neutral, size, tB, tR, samples, v):
                 location[idx] = loc
                 break
 
-    clusters = sorted([idx for idx in fseg if idx != neutral and idx in location], key=(lambda i : size[i]), reverse=True)
+    clusters = sorted([idx for idx in fseg if idx != neutral and idx in location], key=(lambda i: size[i]), reverse=True)
     allclonal = [(2, 0), (2, 1), (3, 2), (4, 2), (1, 0), (3, 0), (3, 1), (4, 0)]
     found_pattern = []
     best_pattern = {}
@@ -463,11 +490,11 @@ def findClonalClusters(fseg, neutral, size, tB, tR, samples, v):
     best_value = 0
     
     for cluster in clusters:
-        rightpos = sum( (fseg[cluster][p]['rdr'] - fseg[neutral][p]['rdr']) > tR for p in samples)
-        leftpos = sum( (fseg[cluster][p]['rdr'] - fseg[neutral][p]['rdr']) < -tR for p in samples)
+        rightpos = sum((fseg[cluster][p]['rdr'] - fseg[neutral][p]['rdr']) > tR for p in samples)
+        leftpos = sum((fseg[cluster][p]['rdr'] - fseg[neutral][p]['rdr']) < -tR for p in samples)
 
-        eqbaf = (lambda p : abs(fseg[cluster][p]['baf'] - fseg[neutral][p]['baf']) <= tB)
-        eqrdr = (lambda p : abs(fseg[cluster][p]['rdr'] - fseg[neutral][p]['rdr']) <= tR)
+        eqbaf = (lambda p: abs(fseg[cluster][p]['baf'] - fseg[neutral][p]['baf']) <= tB)
+        eqrdr = (lambda p: abs(fseg[cluster][p]['rdr'] - fseg[neutral][p]['rdr']) <= tR)
 
         if True in set(eqbaf(p) and heigh[p] for p in samples):
             continue
@@ -501,12 +528,12 @@ def findClonalClusters(fseg, neutral, size, tB, tR, samples, v):
         if v >= 3:
             sys.stderr.write(debug("### Potential clonal cluster {} with copy numbers {}\n".format(cluster, options)))
 
-        regPurity = (lambda v : 1.0 if 1.0 <= v <= 1.05 else (0.0 if -0.05 <= v <= 0.0 else v))
-        calcPurity = (lambda d, c, r : regPurity(float(2 * d - 2 * r) / float(2 * r + 2 * d - c * d)))
+        regPurity = (lambda v: 1.0 if 1.0 <= v <= 1.05 else (0.0 if -0.05 <= v <= 0.0 else v))
+        calcPurity = (lambda d, c, r: regPurity(float(2 * d - 2 * r) / float(2 * r + 2 * d - c * d)))
         calcScalingFactor = (lambda p, d : float(2.0 + 2.0 * p) / float(d))
-        calcFraction = (lambda p, cn : float(2.0 * (1.0 - p) + sum(cn) * p))
-        calcRDR = (lambda p, cn, s : calcFraction(p, cn) / float(s) )
-        calcBAF = (lambda p, cn : float(1.0 * (1.0 - p) + min(cn) * p) / calcFraction(p, cn) )
+        calcFraction = (lambda p, cn: float(2.0 * (1.0 - p) + sum(cn) * p))
+        calcRDR = (lambda p, cn, s: calcFraction(p, cn) / float(s))
+        calcBAF = (lambda p, cn: float(1.0 * (1.0 - p) + min(cn) * p) / calcFraction(p, cn))
         
         for opt in options:            
             purity = {p : calcPurity(fseg[neutral][p]['rdr'], sum(opt), fseg[cluster][p]['rdr']) for p in samples}
@@ -523,8 +550,8 @@ def findClonalClusters(fseg, neutral, size, tB, tR, samples, v):
             for cn in [a for a in allclonal if a != opt]:
                 estRDR = {p : calcRDR(purity[p], cn, scaling[p]) for p in samples}
                 estBAF = {p : calcBAF(purity[p], cn) for p in samples}
-                checkRDR = (lambda r, i : set(p for p in samples if abs(r[p] - fseg[i][p]['rdr']) <= tR) == samples)
-                checkBAF = (lambda b, i : set(p for p in samples if abs(b[p] - fseg[i][p]['baf']) <= tB) == samples)
+                checkRDR = (lambda r, i: set(p for p in samples if abs(r[p] - fseg[i][p]['rdr']) <= tR) == samples)
+                checkBAF = (lambda b, i: set(p for p in samples if abs(b[p] - fseg[i][p]['baf']) <= tB) == samples)
                 candidates = [idx for idx in clusters if idx not in curr_pattern and checkRDR(estRDR, idx) and checkBAF(estBAF, idx)]
                 if len(candidates) > 0:
                     choice = max(candidates, key=(lambda i : size[i]))
@@ -574,16 +601,17 @@ def parseClonalClusters(clonal, fseg, neutral, size, samples, v):
 
     purity = {p : calcPurity(fseg[neutral][p]['rdr'], cn, fseg[second][p]['rdr']) for p in samples}
     if False in set(0.0 <= purity[p] <= 1.0 for p in samples):
-        raise RuntimeError(error('The specified clonal clusters do not allow for scaling because resulting purity is {}!'.format(purity)))
+        raise RuntimeError(error('The specified clonal clusters do not allow for scaling because resulting purity is '
+                                 '{}!'.format(purity)))
     scaling = {p : calcScalingFactor(purity[p], fseg[neutral][p]['rdr']) for p in samples}
     if False in set(scaling[p] >= 0.0 for p in samples):
-        raise RuntimeError(error('The specified clonal clusters do not allow for scaling because resulting scaling factor is {}!'.format(scaling)))
+        raise RuntimeError(error('The specified clonal clusters do not allow for scaling because resulting scaling '
+                                 'factor is {}!'.format(scaling)))
 
     pattern = {e.split(':')[0] : (int(e.split(':')[1]), int(e.split(':')[2])) for e in given}
     scale = (neutral, second)
     
     return pattern, scale
-
 
 
 def runningTetraploid(clonal, scale, size, args):
@@ -617,17 +645,18 @@ def execute(args, basecmd, n, outprefix):
         while True:
             nextline = process.stderr.readline().strip()
             buffer.append(nextline)
-            if ';' in nextline:
+            if ';' in str(nextline):
                 progressbar.progress(advance=True, msg="Obj value {}".format(float(nextline.split()[-2][:-1])))
-            if not nextline and process.poll() is not None:
+            if not nextline and process.poll():
                 break
 
     stdout, stderr = process.communicate()
     exitcode = process.returncode
+
     if exitcode == 0:
         obj = -1
         for line in reversed(buffer):
-            if 'Final objective' in line:
+            if 'Final objective' in str(line):
                 for e in line.split():
                     if isfloat(e):
                         obj = float(e)
@@ -636,7 +665,8 @@ def execute(args, basecmd, n, outprefix):
             if args['v'] >= 1:
                 sys.stderr.write(info('# Best objective found with {} clones: {}\n'.format(n, obj)))
         else:
-            raise RuntimeError(error('Failed to parse the output of the following command because the final objective was not found: \n\t\t{}\n'.format(cmd)))
+            raise RuntimeError(error('Failed to parse the output of the following command because the final objective '
+                                     'was not found: \n\t\t{}\n'.format(cmd)))
     else:
         raise RuntimeError(error("The following command failed: \n\t\t{}\nwith {}\n".format(cmd, buffer)))
 
@@ -653,13 +683,15 @@ def select(diploid, tetraploid, v, rundir, g, limit):
             dscores[dip[0]] = dip[1]
         if v >= 2:
             sys.stderr.write(info('## Objective value is used as scores for diploid results\n'))
-            sys.stderr.write(info('\n'.format(['## Diploid with {} clones - OBJ: {} - score: {}'.format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
+            sys.stderr.write(info('\n'.format(['## Diploid with {} clones - OBJ: {} - score: {}'
+                                              .format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
 
         for tet in tetraploid:
             tscores[tet[0]] = tet[1]
         if v >= 2:
             sys.stderr.write(info('## Objective value is used as scores for tetraploid results\n'))
-            sys.stderr.write(info('\n'.format(['## Tetraploid with {} clones - OBJ: {} - score: {}'.format(t[0], t[1], tscores[d[0]]) for t in tetraploid]) + '\n'))
+            sys.stderr.write(info('\n'.format(['## Tetraploid with {} clones - OBJ: {} - score: {}'
+                                              .format(t[0], t[1], tscores[d[0]]) for t in tetraploid]) + '\n'))
     else:
         for i, dip in enumerate(diploid):
             if i == 0:
@@ -671,7 +703,8 @@ def select(diploid, tetraploid, v, rundir, g, limit):
 
         if v >= 2:
             sys.stderr.write(info('## Scores approximating second derivative for diploid results\n'))
-            sys.stderr.write(info('\n'.join(['## Diploid with {} clones - OBJ: {} - score: {}'.format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
+            sys.stderr.write(info('\n'.join(['## Diploid with {} clones - OBJ: {} - score: {}'
+                                            .format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
 
         for i, tet in enumerate(tetraploid):
             if i == 0:
@@ -683,7 +716,8 @@ def select(diploid, tetraploid, v, rundir, g, limit):
 
         if v >= 2:
             sys.stderr.write(info('## Scores approximating second derivative for tetraploid results\n'))
-            sys.stderr.write(info('\n'.join(['## Tetraploid with {} clones - OBJ: {} - score: {}'.format(t[0], t[1], tscores[t[0]]) for t in tetraploid]) + '\n'))
+            sys.stderr.write(info('\n'.join(['## Tetraploid with {} clones - OBJ: {} - score: {}'
+                                            .format(t[0], t[1], tscores[t[0]]) for t in tetraploid]) + '\n'))
 
     dchosen = max(diploid, key=(lambda x : dscores[x[0]]))
     dbout = os.path.join(rundir, 'chosen.diploid.bbc.ucn')
@@ -691,7 +725,8 @@ def select(diploid, tetraploid, v, rundir, g, limit):
     dsout = os.path.join(rundir, 'chosen.diploid.seg.ucn')
     shutil.copy2(dchosen[2] + '.seg.ucn.tsv', dsout)
     if v >= 1:
-        sys.stderr.write(info('# The chosen diploid solution has {} clones with OBJ: {} and score: {}\n'.format(dchosen[0], dchosen[1], dscores[dchosen[0]])))
+        sys.stderr.write(info('# The chosen diploid solution has {} clones with OBJ: {} and score: {}\n'
+                              .format(dchosen[0], dchosen[1], dscores[dchosen[0]])))
     if v >= 2:
         sys.stderr.write(info('## The related-diploid resulting files are copied to {} and {}\n'.format(dbout, dsout)))
 
@@ -701,22 +736,26 @@ def select(diploid, tetraploid, v, rundir, g, limit):
     tsout = os.path.join(rundir, 'chosen.tetraploid.seg.ucn')
     shutil.copy2(tchosen[2] + '.seg.ucn.tsv', tsout)
     if v >= 1:
-        sys.stderr.write(info('# The chosen tetraploid solution has {} clones with OBJ: {} and score: {}\n'.format(tchosen[0], tchosen[1], tscores[tchosen[0]])))
+        sys.stderr.write(info('# The chosen tetraploid solution has {} clones with OBJ: {} and score: {}\n'
+                              .format(tchosen[0], tchosen[1], tscores[tchosen[0]])))
     if v >= 2:
-        sys.stderr.write(info('## The related-tetraploid resulting files are copied to {} and {}\n'.format(tbout, tsout)))
+        sys.stderr.write(info('## The related-tetraploid resulting files are copied to {} and {}\n'
+                              .format(tbout, tsout)))
 
     bbest = os.path.join(rundir, 'best.bbc.ucn')
     sbest = os.path.join(rundir, 'best.seg.ucn')
     if tchosen[0] < dchosen[0]:
         shutil.copy2(tchosen[2] + '.bbc.ucn.tsv', bbest)
         shutil.copy2(tchosen[2] + '.seg.ucn.tsv', sbest)
-        sys.stderr.write(info('# The chosen solution is tetraploid with {} clones and is written in {} and {}\n'.format(tchosen[0], bbest, sbest)))
+        sys.stderr.write(info('# The chosen solution is tetraploid with {} clones and is written in {} and {}\n'
+                              .format(tchosen[0], bbest, sbest)))
 #        if tchosen[0] == tetraploid[0][0] and False not in set(tscores[tet[0]] <= 0.05 for i, tet in enumerate(tetraploid) if i > 0):
 #            sys.stderr.write(warning("### HATCHet inferred the presence of a single tetraploid tumor clone and there are two possible cases for this inference:\n\t1. This is indeed the true clonal composition of the tumor. This case can be typically confirmed by the fact that \n\t\t\t(I) The chosen number of clones for diploid solutions is also pretty small (3-4 clones)\n\t\t\t(II) the objective value for tetraploid solutions keeps to be slightly decreasing when increasing the number of clones \n\t\t\t(III) the objective value of tetraploid solutions is not hugely different from the corresponding objective value of diploid solutions with the same number of clones. \n\t2. The heuristic to identify a clonal cluster failed. When this is the case, there are three typical observations: \n\t\t\t(I) The chosen number of clones for diploid solutions can be higher\n\t\t\t(II) the objective value does not almost vary (or only very slightly) when increasing the number of clones \n\t\t\t(III) the objective value is typically much higher than the corresponding values for diploid solutions.\n\nWhen the solution with a single tetraploid tumor clone appears suspicious, please use the CBB plot generated by BBot to evaluate the clonal cluster idetified by the heuristic. If the identified clonal cluster is clearly wrong there are two options to fix the inference:\n\t1. Use the parameters which control the heuristic of this method, more specifically increase/decrease the values of the thresholds tR and tB to consider higher/lower noise in the data, or decrease/increase the minimum coverage of the genome -ts used to select potential clonal clusters in order to have less/more clonal clusters to consider. Typically, adding more cluster helps the heuristic to have more information available.\n\t2. Improve the clustering of cluBB, e.g. increase the values of the thresholds tR and tB of cluBB to avoid overfitting and overclustering."))
     else:
         shutil.copy2(dchosen[2] + '.bbc.ucn.tsv', bbest)
         shutil.copy2(dchosen[2] + '.seg.ucn.tsv', sbest)
-        sys.stderr.write(info('# The chosen solution is diploid with {} clones and is written in {} and {}\n'.format(dchosen[0], bbest, sbest)))
+        sys.stderr.write(info('# The chosen solution is diploid with {} clones and is written in {} and {}\n'
+                              .format(dchosen[0], bbest, sbest)))
 
 
 def selectDiploid(diploid, v, rundir, g, limit):
@@ -727,7 +766,8 @@ def selectDiploid(diploid, v, rundir, g, limit):
             dscores[dip[0]] = dip[1]
         if v >= 2:
             sys.stderr.write(info('## Objective value is used as scores for diploid results\n'))
-            sys.stderr.write(info('\n'.format(['## Diploid with {} clones - OBJ: {} - score: {}'.format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
+            sys.stderr.write(info('\n'.format(['## Diploid with {} clones - OBJ: {} - score: {}'
+                                              .format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
     else:
         for i, dip in enumerate(diploid):
             if i == 0:
@@ -739,7 +779,8 @@ def selectDiploid(diploid, v, rundir, g, limit):
 
         if v >= 2:
             sys.stderr.write(info('## Scores approximating second derivative for diploid results\n'))
-            sys.stderr.write(info('\n'.join(['## Diploid with {} clones - OBJ: {} - score: {}'.format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
+            sys.stderr.write(info('\n'.join(['## Diploid with {} clones - OBJ: {} - score: {}'
+                                            .format(d[0], d[1], dscores[d[0]]) for d in diploid]) + '\n'))
 
     dchosen = max(diploid, key=(lambda x : dscores[x[0]]))
     dbout = os.path.join(rundir, 'chosen.diploid.bbc.ucn')
@@ -747,7 +788,8 @@ def selectDiploid(diploid, v, rundir, g, limit):
     dsout = os.path.join(rundir, 'chosen.diploid.seg.ucn')
     shutil.copy2(dchosen[2] + '.seg.ucn.tsv', dsout)
     if v >= 1:
-        sys.stderr.write(info('# The chosen diploid solution has {} clones with OBJ: {} and score: {}\n'.format(dchosen[0], dchosen[1], dscores[dchosen[0]])))
+        sys.stderr.write(info('# The chosen diploid solution has {} clones with OBJ: {} and score: {}\n'
+                              .format(dchosen[0], dchosen[1], dscores[dchosen[0]])))
     if v >= 2:
         sys.stderr.write(info('## The related-diploid resulting files are copied to {} and {}\n'.format(dbout, dsout)))
 
@@ -757,7 +799,8 @@ def selectDiploid(diploid, v, rundir, g, limit):
 
     shutil.copy2(dchosen[2] + '.bbc.ucn.tsv', bbest)
     shutil.copy2(dchosen[2] + '.seg.ucn.tsv', sbest)
-    sys.stderr.write(info('# The chosen solution is diploid with {} clones and is written in {} and {}\n'.format(dchosen[0], bbest, sbest)))
+    sys.stderr.write(info('# The chosen solution is diploid with {} clones and is written in {} and {}\n'
+                          .format(dchosen[0], bbest, sbest)))
 
 
 def selectTetraploid(tetraploid, v, rundir, g, limit):
@@ -768,7 +811,8 @@ def selectTetraploid(tetraploid, v, rundir, g, limit):
             tscores[tet[0]] = tet[1]
         if v >= 2:
             sys.stderr.write(info('## Objective value is used as scores for tetraploid results\n'))
-            sys.stderr.write(info('\n'.format(['## Tetraploid with {} clones - OBJ: {} - score: {}'.format(t[0], t[1], tscores[d[0]]) for t in tetraploid]) + '\n'))
+            sys.stderr.write(info('\n'.format(['## Tetraploid with {} clones - OBJ: {} - score: {}'
+                                              .format(t[0], t[1], tscores[d[0]]) for t in tetraploid]) + '\n'))
     else:
         for i, tet in enumerate(tetraploid):
             if i == 0:
@@ -780,7 +824,8 @@ def selectTetraploid(tetraploid, v, rundir, g, limit):
 
         if v >= 2:
             sys.stderr.write(info('## Scores approximating second derivative for tetraploid results\n'))
-            sys.stderr.write(info('\n'.join(['## Tetraploid with {} clones - OBJ: {} - score: {}'.format(t[0], t[1], tscores[t[0]]) for t in tetraploid]) + '\n'))
+            sys.stderr.write(info('\n'.join(['## Tetraploid with {} clones - OBJ: {} - score: {}'
+                                            .format(t[0], t[1], tscores[t[0]]) for t in tetraploid]) + '\n'))
 
     tchosen = max(tetraploid, key=(lambda x : tscores[x[0]]))
     tbout = os.path.join(rundir, 'chosen.tetraploid.bbc.ucn')
@@ -788,15 +833,18 @@ def selectTetraploid(tetraploid, v, rundir, g, limit):
     tsout = os.path.join(rundir, 'chosen.tetraploid.seg.ucn')
     shutil.copy2(tchosen[2] + '.seg.ucn.tsv', tsout)
     if v >= 1:
-        sys.stderr.write(info('# The chosen tetraploid solution has {} clones with OBJ: {} and score: {}\n'.format(tchosen[0], tchosen[1], tscores[tchosen[0]])))
+        sys.stderr.write(info('# The chosen tetraploid solution has {} clones with OBJ: {} and score: {}\n'
+                              .format(tchosen[0], tchosen[1], tscores[tchosen[0]])))
     if v >= 2:
-        sys.stderr.write(info('## The related-tetraploid resulting files are copied to {} and {}\n'.format(tbout, tsout)))
+        sys.stderr.write(info('## The related-tetraploid resulting files are copied to {} and {}\n'
+                              .format(tbout, tsout)))
 
     bbest = os.path.join(rundir, 'best.bbc.ucn')
     sbest = os.path.join(rundir, 'best.seg.ucn')
     shutil.copy2(tchosen[2] + '.bbc.ucn.tsv', bbest)
     shutil.copy2(tchosen[2] + '.seg.ucn.tsv', sbest)
-    sys.stderr.write(info('# The chosen solution is tetraploid with {} clones and is written in {} and {}\n'.format(tchosen[0], bbest, sbest)))
+    sys.stderr.write(info('# The chosen solution is tetraploid with {} clones and is written in {} and {}\n'
+                          .format(tchosen[0], bbest, sbest)))
 
 
 def forward(f, i, g, limit):
@@ -817,19 +865,30 @@ def estimate_forward(f, i, g, knw, limit):
 
 
 def central(f, i, g, limit):
-    if limit is None:
-        left = float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1])
-    else:
-        left = min(limit, float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1]))
-    right = float(max(f[i][1] - f[i + 1][1], 0.0) / f[i][1])
+    try:
+        if not limit:
+            left = float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1])
+        else:
+            left = min(limit, float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1]))
+    except ZeroDivisionError:
+        left = 0
+
+    try:
+        right = float(max(f[i][1] - f[i + 1][1], 0.0) / f[i][1])
+    except ZeroDivisionError:
+        right = 0
+
     return left - right
     
 
 def backward(f, i, g, limit):
-    if limit is None:
-        left = float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1])
-    else:
-        left = min(limit, float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1]))
+    try:
+        if limit is None:
+            left = float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1])
+        else:
+            left = min(limit, float(max(f[i - 1][1] - f[i][1], 0.0) / f[i - 1][1]))
+    except ZeroDivisionError:
+        left = 0
     right = g
     return left - right
 
@@ -837,8 +896,10 @@ def backward(f, i, g, limit):
 def argmin(d):
     return min(d, key=d.get)
 
+
 def argmax(d):
     return max(d, key=d.get)
+
 
 def isfloat(value):
     try:
@@ -847,24 +908,30 @@ def isfloat(value):
     except ValueError:
         return False
 
+
 def error(msg):
     return "{}{}{}".format("\033[91m\033[1m", msg, "\033[0m")
+
 
 def log(msg):
     return "{}{}{}".format("\033[95m\033[1m", msg, "\033[0m")
 
+
 def warning(msg):
     return "{}{}{}".format("\033[93m", msg, "\033[0m")
+
 
 def info(msg):
     return "{}{}{}".format("\033[96m", msg, "\033[0m")
 
+
 def debug(msg):
     return "{}{}{}".format("\033[92m", msg, "\033[0m")
 
+
 class ProgressBar:
 
-    def __init__(self, total, length, counter=0, verbose=False, decimals=1, fill=unichr(9608), prefix = 'Progress:', suffix = 'Complete'):
+    def __init__(self, total, length, counter=0, verbose=False, decimals=1, fill=chr(9608), prefix = 'Progress:', suffix='Complete'):
         self.total = total
         self.length = length
         self.decimals = decimals
@@ -883,17 +950,17 @@ class ProgressBar:
         filledLength = int(self.length * self.counter // self.total)
         bar = self.fill * filledLength + '-' * (self.length - filledLength)
         rewind = '\x1b[2K\r'
-        result = '%s |%s| %s%% %s' % (self.prefix, bar, percent, self.suffix)
+        # '%s |%s| %s%% %s' % (self.prefix, bar, percent, self.suffix)
+        result = "{} |{}| {}% {}".format(self.prefix, bar, percent, self.suffix)
         if not self.verbose:
-            toprint = rewind + result + " [%s]" % (msg)
+            toprint = "{}{}[{}]".format(rewind, result, msg)
         else:
-            toprint = rewind + msg + "\n" + result
-        write(toprint.encode('utf-8'))
+            toprint = "{}{}\n [{}]".format(rewind, msg, result)
+        write(toprint)
         flush()
         if self.counter == self.total:
             write("\n")
             flush()
-
 
 
 if __name__ == '__main__':

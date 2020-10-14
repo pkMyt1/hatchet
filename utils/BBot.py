@@ -17,15 +17,14 @@ import matplotlib.colors as col
 from matplotlib.pyplot import cm
 from itertools import cycle
 from collections import Counter
-
 from ArgParsing import parse_bbot_args
-
+import Tool_Box
 plt.style.use('ggplot')
 sns.set_style("whitegrid")
 
 
 def main():
-    sys.stderr.write(log("# Parsing and checking input arguments\n"))
+    sys.stderr.write(log("\n# Parsing and checking input arguments\n"))
     args = parse_bbot_args()
     sys.stdout.write(info("\n".join(["## {}:\t{}".format(key, args[key]) for key in args]) + '\n'))
 
@@ -33,48 +32,48 @@ def main():
     bbc, clusters = readBBC(args['input'])
 
     if args['fontscale'] != 1:
-        sns.set(font_scale = args['fontscale'])
+        sns.set(font_scale=args['fontscale'])
 
-    if args['resolution'] is not None:
+    if args['resolution']:
         sys.stderr.write(log("# Merging bins according to resolution\n"))
         bbc, clusters = join(bbc, clusters, args['resolution'])
 
-    if args['ct'] is not None or args['st'] is not None:
+    if args['ct'] or args['st']:
         sys.stderr.write(log("# Bin's clusters are selected accordingly to the provided thresholds\n"))
         bbc, clusters = select(bbc, clusters, args)
 
-    if args['command'] is None or args['command'] == 'RD':
+    if not args['command'] or args['command'] == 'RD':
         out = os.path.join(args['x'], 'readdepthratio.pdf')
         sys.stderr.write(log("# [RD] Plotting read-depth ratio (RDR) for all samples in {}\n".format(out)))
         rdr(bbc, args, out)
 
-    if args['command'] is None or args['command'] == 'CRD':
+    if not args['command'] or args['command'] == 'CRD':
         out = os.path.join(args['x'], 'readdepthratio_clustered.pdf')
         sys.stderr.write(log("# [CRD] Plotting the clustered read-depth ratio (RDR) for each sample in {}\n".format(out)))
         clurdr(bbc, clusters, args, out)
 
-    if args['command'] is None or args['command'] == 'BAF':
+    if not args['command'] or args['command'] == 'BAF':
         out = os.path.join(args['x'], 'ballelefrequency.pdf')
         sys.stderr.write(log("# [BAF] Plotting B-allele frequency (BAF) for all samples in {}\n".format(out)))
         baf(bbc, args, out)
 
-    if args['command'] is None or args['command'] == 'CBAF':
+    if not args['command'] or args['command'] == 'CBAF':
         out = os.path.join(args['x'], 'ballelefrequency_clustered.pdf')
         sys.stderr.write(log("# [CBAF] Plotting the clustered B-allele frequency (BAF) for each sample in {}\n".format(out)))
         clubaf(bbc, clusters, args, out)
 
-    if args['command'] is None or args['command'] == 'BB':
+    if not args['command'] or args['command'] == 'BB':
         out = os.path.join(args['x'], 'bb.pdf')
         sys.stderr.write(log("# [BB] Plotting RDR-BB for all samples in {}\n".format(out)))
         bb(bbc, clusters, args, out)
 
-    if args['command'] is None or args['command'] == 'CBB':
+    if not args['command'] or args['command'] == 'CBB':
         out = os.path.join(args['x'], 'bb_clustered.pdf')
         sys.stderr.write(log("# [CBB] Plotting clustered RDR-BB for all samples in {}\n".format(out)))
         clubb(bbc, clusters, args, out)
 
-    if args['command'] is None or args['command'] == 'CLUSTER':
-        if args['segfile'] is not None:
+    if not args['command'] or args['command'] == 'CLUSTER':
+        if args['segfile']:
             seg = readSEG(args['segfile'])
             out = os.path.join(args['x'], 'clusters.pdf')
             sys.stderr.write(log("# [CLUSTER] Plotting clusters for all samples in {}\n".format(out)))
@@ -84,11 +83,11 @@ def main():
 
 
 def rdr(bbc, args, out):
-    pos = [(c, s) for c in sorted(bbc, key=sortchr) for s in sorted(bbc[c], key=(lambda z : z[0]))]
+    pos = [(c, s) for c in sorted(bbc, key=sortchr) for s in sorted(bbc[c], key=(lambda z: z[0]))]
     lx = 'Genome'
     ly = 'Read-depth ratio (RDR)'
     lh = 'Sample'
-    data = [{lx : x, ly : bbc[b[0]][b[1]][p]['RDR'], lh : p} for x, b in enumerate(pos) for p in bbc[b[0]][b[1]]]
+    data = [{lx: x, ly: bbc[b[0]][b[1]][p]['RDR'], lh: p} for x, b in enumerate(pos) for p in bbc[b[0]][b[1]]]
     df = pd.DataFrame(data)
     df.sort_values([lx, lh], ascending=[True, False])
     figsize = args['figsize'] if args['figsize'] is not None else (8, 2)
@@ -97,7 +96,8 @@ def rdr(bbc, args, out):
 
     with PdfPages(out) as pdf:
         sys.stderr.write(info("## Plotting for all samples..\n"))
-        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, palette=args['cmap'], fit_reg=False, size=figsize[0], aspect=figsize[1], markers="|", scatter_kws={"s":s})
+        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, palette=args['cmap'], fit_reg=False, height=figsize[0],
+                       aspect=figsize[1], markers="|", scatter_kws={"s": s})
         addchr(pos)
         coordinates(args, g)
         plt.xlim(xmin=0, xmax=(len(pos)+1))
@@ -107,7 +107,8 @@ def rdr(bbc, args, out):
 
         for sample, group in df.groupby(lh):
             sys.stderr.write(info("## Plotting for {}..\n".format(sample)))
-            g = sns.lmplot(data=group, x=lx, y=ly, fit_reg=False, size=figsize[0], aspect=figsize[1], markers="|", scatter_kws={"s":s})
+            g = sns.lmplot(data=group, x=lx, y=ly, fit_reg=False, height=figsize[0], aspect=figsize[1], markers="|",
+                           scatter_kws={"s": s})
             addchr(pos)
             coordinates(args, g)
             plt.title("Read-depth ratio in {}".format(sample))
@@ -133,7 +134,9 @@ def clurdr(bbc, clusters, args, out):
     with PdfPages(out) as pdf:
         for sample, group in df.groupby(g):
             sys.stderr.write(info("## Plotting for {}..\n".format(sample)))
-            sns.lmplot(data=group, x=lx, y=ly, hue=lh, fit_reg=False, size=figsize[0], aspect=figsize[1], markers="|", scatter_kws={"s":s}, legend=False)
+            sns.lmplot(data=group, x=lx, y=ly, hue=lh, fit_reg=False, height=figsize[0], aspect=figsize[1], markers="|",
+                       scatter_kws={"s": s}, legend=False)
+
             addchr(pos)
             coordinates(args)
             plt.title("Read-depth ratio in {}".format(sample))
@@ -147,7 +150,7 @@ def baf(bbc, args, out):
     lx = 'Genome'
     ly = 'B-allele frequency (BAF)'
     lh = 'Sample'
-    data = [{lx : x, ly : bbc[b[0]][b[1]][p]['BAF'], lh : p} for x, b in enumerate(pos) for p in bbc[b[0]][b[1]]]
+    data = [{lx: x, ly: bbc[b[0]][b[1]][p]['BAF'], lh: p} for x, b in enumerate(pos) for p in bbc[b[0]][b[1]]]
     df = pd.DataFrame(data)
     df.sort_values([lx, lh], ascending=[True, False])
     figsize = args['figsize'] if args['figsize'] is not None else (8, 2)
@@ -156,7 +159,9 @@ def baf(bbc, args, out):
 
     with PdfPages(out) as pdf:
         sys.stderr.write(info("## Plotting for all samples..\n"))
-        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, palette=args['cmap'], fit_reg=False, size=figsize[0], aspect=figsize[1], markers="|", scatter_kws={"s":s})
+        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, palette=args['cmap'], fit_reg=False, height=figsize[0],
+                       aspect=figsize[1], markers="|", scatter_kws={"s": s})
+
         plt.ylim(ymax=0.5)
         addchr(pos)
         coordinates(args)
@@ -166,7 +171,9 @@ def baf(bbc, args, out):
 
         for sample, group in df.groupby(lh):
             sys.stderr.write(info("## Plotting for {}..\n".format(sample)))
-            sns.lmplot(data=group, x=lx, y=ly, fit_reg=False, size=figsize[0], aspect=figsize[1], markers="|", scatter_kws={"s":s})
+            sns.lmplot(data=group, x=lx, y=ly, fit_reg=False, height=figsize[0], aspect=figsize[1], markers="|",
+                       scatter_kws={"s": s})
+
             plt.ylim(ymax=0.5)
             addchr(pos)
             coordinates(args)
@@ -182,7 +189,7 @@ def clubaf(bbc, clusters, args, out):
     ly = 'B-allele frequency (BAF)'
     g = 'Sample'
     lh = 'Cluster'
-    data = [{lx : x, ly : bbc[b[0]][b[1]][p]['BAF'], g : p, lh : clusters[b[0]][b[1]]} for x, b in enumerate(pos) for p in bbc[b[0]][b[1]]]
+    data = [{lx: x, ly: bbc[b[0]][b[1]][p]['BAF'], g: p, lh: clusters[b[0]][b[1]]} for x, b in enumerate(pos) for p in bbc[b[0]][b[1]]]
     df = pd.DataFrame(data)
     df.sort_values([lx, lh], ascending=[True, True])
     figsize = args['figsize'] if args['figsize'] is not None else (8, 2)
@@ -192,7 +199,9 @@ def clubaf(bbc, clusters, args, out):
     with PdfPages(out) as pdf:
         for sample, group in df.groupby(g):
             sys.stderr.write(info("## Plotting for {}..\n".format(sample)))
-            sns.lmplot(data=group, x=lx, y=ly, hue=lh, fit_reg=False, size=figsize[0], aspect=figsize[1], markers="|", scatter_kws={"s":s}, legend=False)
+            sns.lmplot(data=group, x=lx, y=ly, hue=lh, fit_reg=False, height=figsize[0], aspect=figsize[1], markers="|",
+                       scatter_kws={"s": s}, legend=False)
+
             plt.ylim(ymax=0.5)
             addchr(pos)
             coordinates(args)
@@ -207,7 +216,7 @@ def bb(bbc, clusters, args, out):
     lx = 'RDR'
     ly = '0.5 - BAF'
     g = 'Sample'
-    data = [{lx : bbc[b[0]][b[1]][p]['RDR'], ly : 0.5 - bbc[b[0]][b[1]][p]['BAF'], g : p} for b in pos for p in bbc[b[0]][b[1]]]
+    data = [{lx: bbc[b[0]][b[1]][p]['RDR'], ly: 0.5 - bbc[b[0]][b[1]][p]['BAF'], g: p} for b in pos for p in bbc[b[0]][b[1]]]
     df = pd.DataFrame(data)
     figsize = args['figsize'] if args['figsize'] is not None else (16, 8)
     s = args['markersize'] if args['markersize'] > 0 else 10
@@ -243,10 +252,10 @@ def clubb(bbc, clusters, args, out):
     ly = '0.5 - BAF'
     g = 'Sample'
     lh = 'Cluster'
-    size = {i : float(sum(clusters[b[0]][b[1]] == i for b in pos)) for i in set(clusters[b[0]][b[1]] for b in pos)}
-    data = [{lx : bbc[b[0]][b[1]][p]['RDR'], ly : 0.5 - bbc[b[0]][b[1]][p]['BAF'], g : p, lh : clusters[b[0]][b[1]], 'size' : size[clusters[b[0]][b[1]]]} for b in pos for p in bbc[b[0]][b[1]]]
+    size = {i: float(sum(clusters[b[0]][b[1]] == i for b in pos)) for i in set(clusters[b[0]][b[1]] for b in pos)}
+    data = [{lx: bbc[b[0]][b[1]][p]['RDR'], ly: 0.5 - bbc[b[0]][b[1]][p]['BAF'], g: p, lh: clusters[b[0]][b[1]], 'size':size[clusters[b[0]][b[1]]]} for b in pos for p in bbc[b[0]][b[1]]]
     df = pd.DataFrame(data)
-    order = sorted(set(df[lh]), key=(lambda x : size[x]), reverse=True)
+    order = sorted(set(df[lh]), key=(lambda x: size[x]), reverse=True)
     figsize = args['figsize'] if args['figsize'] is not None else (8, 1.5)
     s = args['markersize'] if args['markersize'] > 0 else 20
 
@@ -254,9 +263,13 @@ def clubb(bbc, clusters, args, out):
     #    for sample, group in df.groupby(g):
     #sys.stderr.write(info("## Plotting for {}..\n".format(sample)))
     if args['colwrap'] > 1:
-        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, hue_order=order, palette=args['cmap'], fit_reg=False, size=figsize[0], aspect=figsize[1], scatter_kws={"s":s}, legend=False, col=g, col_wrap=args['colwrap'])
+        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, hue_order=order, palette=args['cmap'], fit_reg=False,
+                       height=figsize[0], aspect=figsize[1], scatter_kws={"s": s}, legend=False, col=g,
+                       col_wrap=args['colwrap'])
     else:
-        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, hue_order=order, palette=args['cmap'], fit_reg=False, size=figsize[0], aspect=figsize[1], scatter_kws={"s":s}, legend=False, row=g)
+        g = sns.lmplot(data=df, x=lx, y=ly, hue=lh, hue_order=order, palette=args['cmap'], fit_reg=False,
+                       height=figsize[0], aspect=figsize[1], scatter_kws={"s": s}, legend=False, row=g)
+
     #plt.title("{}".format(sample))
     coordinates(args, g)
     #pdf.savefig(bbox_inches='tight')
@@ -274,13 +287,15 @@ def clus(seg, args, out):
     s = args['markersize'] if args['markersize'] > 0 else 20
     mpl.rcParams['figure.figsize'] = (figsize[0], figsize[1])
     pal = cycle(sns.color_palette(args['cmap'], min(20, len(set(seg)))))
-    col = {idx : next(pal) for idx in seg}
+    col = {idx: next(pal) for idx in seg}
 
     with PdfPages(out) as pdf:
         for p in samples:
             sys.stderr.write(info("## Plotting for {}..\n".format(p)))
             for idx in seg:
-                plt.scatter(seg[idx][p]['RDR'], 0.5 - seg[idx][p]['BAF'], c=col[idx], s=(seg[idx][p]['SIZE']**0.5)*20, alpha=0.8)
+                plt.scatter(seg[idx][p]['RDR'], 0.5 - seg[idx][p]['BAF'], c=col[idx], s=(seg[idx][p]['SIZE']**0.5)*20,
+                            alpha=0.8)
+
             plt.title("{}".format(p))
             coordinates(args)
             pdf.savefig(bbox_inches='tight')
@@ -368,7 +383,7 @@ def join(bbc, clusters, resolution):
 
 def select(bbc, clusters, args):
     alls = set(clusters[c][s] for c in clusters for s in clusters[c])
-    count = {idx : {'SIZE' : 0.0, 'CHRS' : set()} for idx in alls}
+    count = {idx: {'SIZE': 0.0, 'CHRS': set()} for idx in alls}
     totsize = sum(1.0 for c in bbc for s in bbc[c])
     for c in bbc:
         for s in bbc[c]:
@@ -459,6 +474,7 @@ def info(msg):
 
 def debug(msg):
     return "{}{}{}".format("\033[92m", msg, "\033[0m")
+
 
 if __name__ == '__main__':
     main()

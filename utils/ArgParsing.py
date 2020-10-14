@@ -2,10 +2,12 @@ import sys
 import os.path
 import argparse
 import subprocess
-import shlex
-
+# import shlex
+# from distutils.version import StrictVersion
+import Tool_Box
 import Supporting as sp
-
+import pysam
+from natsort import natsort
 
 
 def parse_baf_arguments():
@@ -13,7 +15,12 @@ def parse_baf_arguments():
     Parse command line arguments
     Returns:
     """
-    description = "Count the A/B alleles from a matched-normal BAM file and multiple tumor BAM files in specified SNP positions or estimated heterozygous SNPs in the normal genome. This tool can be applied both to whole-genome sequencing (WGS) data or whole-exome sequencing (WES) data, but coding regions must be specified as a BED file in the case of WES."
+    description = \
+        "Count the A/B alleles from a matched-normal BAM file and multiple tumor BAM files in specified SNP " \
+        "positions or estimated heterozygous SNPs in the normal genome. This tool can be applied both to whole-genome " \
+        "sequencing (WGS) data or whole-exome sequencing (WES) data, but coding regions must be specified as a BED " \
+        "file in the case of WES."
+
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("-N","--normal", required=True, type=str, help="BAM file corresponding to matched normal sample")
     parser.add_argument("-T","--tumors", required=True, type=str, nargs='+', help="BAM files corresponding to samples from the same tumor")
@@ -40,17 +47,22 @@ def parse_baf_arguments():
 
     # Parse BAM files, check their existence, and infer or parse the corresponding sample names
     normalbaf = args.normal
-    if not os.path.isfile(normalbaf): raise ValueError(sp.error("The specified normal BAM file does not exist"))
+    if not os.path.isfile(normalbaf):
+        raise ValueError(sp.error("The specified normal BAM file does not exist"))
+
     tumors = args.tumors
     for tumor in tumors:
-        if(not os.path.isfile(tumor)): raise ValueError(sp.error("The specified normal BAM file does not exist"))
+        if not os.path.isfile(tumor):
+            raise ValueError(sp.error("The specified normal BAM file does not exist"))
+
     names = args.samples
-    if names != None and (len(tumors)+1) != len(names):
-        raise ValueError(sp.error("A sample name must be provided for each corresponding BAM: both for each normal sample and each tumor sample"))
-    normal = ()
+    if names and (len(tumors)+1) != len(names):
+        raise ValueError(sp.error("A sample name must be provided for each corresponding BAM: both for each normal "
+                                  "sample and each tumor sample"))
+    # normal = ()
     samples = set()
     if names is None:
-        normal = (normalbaf, os.path.splitext(os.path.basename(normalbaf))[0] )
+        normal = (normalbaf, os.path.splitext(os.path.basename(normalbaf))[0])
         for tumor in tumors:
             samples.add((tumor, os.path.splitext(os.path.basename(tumor))[0]))
     else:
@@ -61,67 +73,81 @@ def parse_baf_arguments():
     # In default mode, check the existence and compatibility of samtools and bcftools
     samtools = os.path.join(args.samtools, "samtools")
     bcftools = os.path.join(args.bcftools, "bcftools")
+
     if sp.which(samtools) is None:
         raise ValueError(sp.error("{}samtools has not been found or is not executable!{}"))
     elif sp.which(bcftools) is None:
         raise ValueError(sp.error("{}bcftools has not been found or is not executable!{}"))
-    elif not checkVersions(samtools, bcftools):
-        raise ValueError(sp.error("The versions of samtools and bcftools are different! Please provide the tools with the same version to avoid inconsistent behaviors!{}"))
+
+    # elif not checkVersions(samtools, bcftools):
+    #     #  This fails on bug fix releases
+    #     raise ValueError(sp.error("The versions of samtools and bcftools are different! Please provide the tools with "
+    #                               "the same version to avoid inconsistent behaviors!"))
 
     # Check that SNP, reference, and region files exist when given in input
-    if args.snps != None and not os.path.isfile(args.snps):
+    if args.snps and not os.path.isfile(args.snps):
         raise ValueError(sp.error("The SNP file does not exist"))
-    if args.reference != None:
+    if args.reference:
         if not os.path.isfile(args.reference):
             raise ValueError(sp.error("The human-genome reference file does not exist"))
         else:
-            sp.log(msg="The human-reference genome has been provided! Running in default recommended mode..\n", level="INFO")
+            sp.log(msg="The human-reference genome has been provided! Running in default recommended mode..\n",
+                   level="INFO")
     else:
         sp.log(msg="The human-reference genome has not been provided! Running in naive mode..\n", level="WARN")
-    if args.regions != None and not os.path.isfile(args.regions):
+
+    if args.regions and not os.path.isfile(args.regions):
         raise ValueError(sp.error("The BED file of regions does not exist"))
     elif args.regions is None:
-        sp.log(msg="In case of WES data a BED file specified by --regions is REQUIRED, or the mincov parameter should be increased sufficiently to discard off-target regions\n", level="WARN")
-    if args.snps != None and args.regions != None:
-        raise ValueError(sp.error("Both SNP list and genomic regions have been provided, please provide only one of these!"))
+        sp.log(msg="In case of WES data a BED file specified by --regions is REQUIRED, or the mincov parameter should "
+                   "be increased sufficiently to discard off-target regions\n", level="WARN")
+
+    if args.snps and args.regions:
+        raise ValueError(sp.error("Both SNP list and genomic regions have been provided, please provide only one of "
+                                  "these!"))
 
     # Extract the names of the chromosomes and check their consistency across the given BAM files and the reference
-    chromosomes = extractChromosomes(samtools, normal, samples, args.reference)
+    # chromosomes = extractChromosomes(samtools, normal, samples, args.reference)
+    chromosomes = extractChromosomes(samtools, normal, samples)
 
     if not args.processes > 0: raise ValueError(sp.error("The number of parallel processes must be greater than 0"))
     if not args.readquality >= 0: raise ValueError(sp.error("The read mapping quality must be positive"))
     if not args.basequality >= 0: raise ValueError(sp.error("The base quality quality must be positive"))
-    if not 0 <= args.gamma and args.gamma <= 1: raise ValueError(sp.error("Gamma must be a floating value between 0 and 1"))
-    if not 0 <= args.maxshift and args.maxshift <= 1: raise ValueError(sp.error("Max BAF shift must be a floating value between 0 and 0.5"))
+    if not 0 <= args.gamma and args.gamma <= 1:
+        raise ValueError(sp.error("Gamma must be a floating value between 0 and 1"))
+    if not 0 <= args.maxshift and args.maxshift <= 1:
+        raise ValueError(sp.error("Max BAF shift must be a floating value between 0 and 0.5"))
     if not args.mincov >= 0: raise ValueError(sp.error("The minimum-coverage value must be positive"))
     if not args.maxcov >= 0: raise ValueError(sp.error("The maximum-coverage value must be positive"))
     if not args.snpquality >= 0: raise ValueError(sp.error("The QUAL value must be positive"))
 
     if args.verbose:
-        sp.log(msg='stderr of samtools and bcftools will be collected in the following file "samtools.log"\n', level="WARN")
-        with open("samtools.log", "w") as f: f.write("")
+        sp.log(msg='stderr of samtools and bcftools will be collected in the following file "samtools.log"\n',
+               level="WARN")
+        with open("samtools.log", "w") as f:
+            f.write("")
 
-    return {"normal" : normal,
-            "samples" : samples,
-            "chromosomes" : chromosomes,
-            "samtools" : samtools,
-            "bcftools" : bcftools,
-            "snps" : args.snps,
-            "regions" : args.regions,
-            "reference" : args.reference,
-            "j" : args.processes,
-            "q" : args.readquality,
-            "Q" : args.basequality,
-            "qual" : args.snpquality,
-            "E" : args.newbaq,
-            "gamma" : args.gamma,
-            "maxshift" : args.maxshift,
-            "mincov" : args.mincov,
-            "maxcov" : args.maxcov,
-            "outputNormal" : args.outputnormal,
-            "outputTumors" : args.outputtumors,
-            "outputSnps" : args.outputsnps,
-            "verbose" : args.verbose}
+    return {"normal": normal,
+            "samples": samples,
+            "chromosomes": chromosomes,
+            "samtools": samtools,
+            "bcftools": bcftools,
+            "snps": args.snps,
+            "regions": args.regions,
+            "reference": args.reference,
+            "j": args.processes,
+            "q": args.readquality,
+            "Q": args.basequality,
+            "qual": args.snpquality,
+            "E": args.newbaq,
+            "gamma": args.gamma,
+            "maxshift": args.maxshift,
+            "mincov": args.mincov,
+            "maxcov": args.maxcov,
+            "outputNormal": args.outputnormal,
+            "outputTumors": args.outputtumors,
+            "outputSnps": args.outputsnps,
+            "verbose": args.verbose}
 
 
 def parse_bin_arguments():
@@ -129,7 +155,12 @@ def parse_bin_arguments():
     Parse command line arguments
     Returns:
     """
-    description = "Count the mapped sequencing reads in bins of fixed and given length, uniformly for a BAM file of a normal sample and one or more BAM files of tumor samples. This program supports both data from whole-genome sequencing (WGS) and whole-exome sequencing (WES), but the a BED file with targeted regions is required when considering WES."
+    description = \
+        "Count the mapped sequencing reads in bins of fixed and given length, uniformly for a BAM file of a normal " \
+        "sample and one or more BAM files of tumor samples. This program supports both data from whole-genome " \
+        "sequencing (WGS) and whole-exome sequencing (WES), but the a BED file with targeted regions is required when " \
+        "considering WES."
+
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("-N","--normal", required=True, type=str, help="BAM file corresponding to matched normal sample")
     parser.add_argument("-T","--tumors", required=True, type=str, nargs='+', help="BAM files corresponding to samples from the same tumor")
@@ -150,12 +181,17 @@ def parse_bin_arguments():
     normalbaf = args.normal
     if not os.path.isfile(normalbaf): raise ValueError(sp.error("The specified normal BAM file does not exist"))
     tumors = args.tumors
+
     for tumor in tumors:
-        if(not os.path.isfile(tumor)): raise ValueError(sp.error("The specified normal BAM file does not exist"))
+        if not os.path.isfile(tumor):
+            raise ValueError(sp.error("{} tumor BAM file does not exist").format(tumor))
+
     names = args.samples
-    if names != None and (len(tumors)+1) != len(names):
-        raise ValueError(sp.error("A sample name must be provided for each corresponding BAM: both for each normal sample and each tumor sample"))
-    normal = ()
+    if None and (len(tumors)+1) != len(names):
+        raise ValueError(sp.error("A sample name must be provided for each corresponding BAM: both for each normal "
+                                  "sample and each tumor sample"))
+
+    # normal = ()
     samples = set()
     if names is None:
         normal = (normalbaf, os.path.splitext(os.path.basename(normalbaf))[0] )
@@ -184,38 +220,45 @@ def parse_bin_arguments():
             size = int(args.size[:-2]) * 1000000
         else:
             size = int(args.size)
-    except:
+    except ValueError:
         raise ValueError(sp.error("Size must be a number, optionally ending with either \"kb\" or \"Mb\"!"))
 
     # Check that either region file or available reference name are available
     if args.reference is None and args.regions is None:
-        raise ValueError(sp.error("Please either provide a BED file of regions or specify a name of an available references for inferring maximum-chromosome lengths"))
+        raise ValueError(sp.error("Please either provide a BED file of regions or specify a name of an available "
+                                  "references for inferring maximum-chromosome lengths"))
+
     if args.reference is not None and not os.path.isfile(args.reference):
         raise ValueError(sp.error("The specified reference genome does not exist!"))
-    refdict = os.path.splitext(args.reference)[0] + '.dict'
+
+    refdict = "{}.dict".format(args.reference)
+    # refdict = os.path.splitext(args.reference)[0] + '.dict'
+    # refdict = "{}.fai".format(args.reference)
     if args.reference is not None and not os.path.isfile(refdict):
-        raise ValueError(sp.error("The dictionary of the refence genome has not been found! Reference genome must be indeced and its dictionary must exist in the same directory with same name but extension .dict"))
-    
+        raise ValueError(sp.error("The dictionary of the refence genome has not been found! Reference genome must be "
+                                  "indeced and its dictionary must exist in the same directory with same name but "
+                                  "extension .dict"))
+
     # Extract the names of the chromosomes and check their consistency across the given BAM files and the reference
     chromosomes = extractChromosomes(samtools, normal, samples)
 
     if not args.processes > 0: raise ValueError(sp.error("The number of parallel processes must be greater than 0"))
     if not args.readquality >= 0: raise ValueError(sp.error("The read mapping quality must be positive"))
 
-    return {"normal" : normal,
-            "samples" : samples,
-            "chromosomes" : chromosomes,
-            "samtools" : samtools,
-            "regions" : args.regions,
-            "size" : size,
-            "reference" : args.reference,
-            "refdict" : refdict,
-            "j" : args.processes,
-            "q" : args.readquality,
-            "outputNormal" : args.outputnormal,
-            "outputTumors" : args.outputtumors,
-            "outputTotal" : args.outputtotal,
-            "verbose" : args.verbose}
+    return {"normal": normal,
+            "samples": samples,
+            "chromosomes": chromosomes,
+            "samtools": samtools,
+            "regions": args.regions,
+            "size": size,
+            "reference": args.reference,
+            "refdict": refdict,
+            "j": args.processes,
+            "q": args.readquality,
+            "outputNormal": args.outputnormal,
+            "outputTumors": args.outputtumors,
+            "outputTotal": args.outputtotal,
+            "verbose": args.verbose}
 
 
 def parse_combbo_args():
@@ -281,6 +324,7 @@ def parse_clubb_args():
     Parse command line arguments
     Returns:
     """
+
     description = "Combine tumor bin counts, normal bin counts, and tumor allele counts to obtain the read-depth ratio and the mean B-allel frequency (BAF) of each bin. Optionally, the normal allele counts can be provided to add the BAF of each bin scaled by the normal BAF. The output is written on stdout."
     parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("BBFILE", help="A BB file containing a line for each bin in each sample and the corresponding values of read-depth ratio and B-allele frequency (BAF)")
@@ -329,22 +373,22 @@ def parse_clubb_args():
     if not os.path.isdir(os.path.join(args.bnpy, "bnpy")) or not os.path.isfile(os.path.join(args.bnpy, "bnpy/HModel.py")) or not os.path.isfile(os.path.join(args.bnpy, "bnpy/Run.py")):
         raise ValueError(sp.error("The specified root path for BNPY do not contain a BNPY folder!"))
 
-    return {"bbfile" : args.BBFILE,
-            "bnpydir" : args.bnpy,
-            "cloud" : args.bootclustering,
-            "diploidbaf" : args.diploidbaf,
-            "rdtol" : args.tolerancerdr,
-            "baftol" : args.tolerancebaf,
-            "ratiodeviation" : args.ratiodeviation,
-            "bafdeviation" : args.bafdeviation,
-            "seed" : args.seed,
-            "initclusters" : args.initclusters,
-            "tuning" : args.tuning,
-            "restarts" : args.restarts,
-            "verbose" : args.verbose,
-            "disable" : args.disablebar,
-            "outsegments" : args.outsegments,
-            "outbins" : args.outbins}
+    return {"bbfile": args.BBFILE,
+            "bnpydir": args.bnpy,
+            "cloud": args.bootclustering,
+            "diploidbaf": args.diploidbaf,
+            "rdtol": args.tolerancerdr,
+            "baftol": args.tolerancebaf,
+            "ratiodeviation": args.ratiodeviation,
+            "bafdeviation": args.bafdeviation,
+            "seed": args.seed,
+            "initclusters": args.initclusters,
+            "tuning": args.tuning,
+            "restarts": args.restarts,
+            "verbose": args.verbose,
+            "disable": args.disablebar,
+            "outsegments": args.outsegments,
+            "outbins": args.outbins}
 
 
 def parse_bbot_args():
@@ -381,7 +425,7 @@ def parse_bbot_args():
     if args.colormap not in {"Set1", "Set2", "Set3", "Paired", "Accent", "Dark2", "tab10", "tab20", "husl", "hls", "muted", "colorblind", "Pastel1", "Pastel2"}:
         raise ValueError(sp.error("Unrecognized colormap!"))
     if args.resolution is not None and args.resolution < 1:
-        raise ValueError(error("Resolution must be greater than 1!"))
+        raise ValueError(sp.error("Resolution must be greater than 1!"))
     if args.chrthreshold is not None and not( 0 <= args.chrthreshold <= 22):
         raise ValueError(sp.error("The chromosome threshold must be a integer in \{0, ..., 22\}!"))
     if args.colwrap < 1:
@@ -420,61 +464,96 @@ def parse_bbot_args():
 
 
 def extractChromosomes(samtools, normal, tumors, reference=None):
+
     # Read the names of sequences in normal BAM file
     normal_sq = getSQNames(samtools, normal[0])
 
     # Extract only the names of chromosomes in standard formats
+    '''
+    Adding chromosome names to two different variables, checking if they exist, and then adding them to a third
+    variable is redundant.
     chrm = set()
     no_chrm = set()
+    '''
+
+    chromosomes = set()
     for i in range(1, 23):
         if str(i) in normal_sq:
-            no_chrm.add(str(i))
+            # no_chrm.add(str(i))
+            chromosomes.add(str(i))
         elif "chr" + str(i) in normal_sq:
-            chrm.add("chr" + str(i))
+            # chrm.add("chr" + str(i))
+            chromosomes.add("chr" + str(i))
         else:
-            sys.stderr.write("WARNING: a chromosome named either {} or a variant of CHR{} cannot be found in the normal BAM file\n".format(i, i))
+            sys.stderr.write("WARNING: a chromosome named either {} or a variant of CHR{} cannot be found in the "
+                             "normal BAM file\n".format(i, i))
 
-    if len(chrm) == 0 and len(no_chrm) == 0: raise ValueError("No chromosomes found in the normal BAM")
-    chromosomes = set()
+    # if len(chrm) == 0 and len(no_chrm) == 0: raise ValueError("No chromosomes found in the normal BAM")
+    if chromosomes == 0: raise ValueError("No chromosomes found in the normal BAM")
+
+    '''
+    Adding chromosome names to two different variables, checking if they exist, and then adding them to a third
+    variable is redundant.
     if len(chrm) > len(no_chrm):
         chromosomes = chrm
     else:
         chromosomes = no_chrm
+    '''
 
     # Check that chromosomes with the same names are present in each tumor BAM contain
     for tumor in tumors:
         tumor_sq = getSQNames(samtools, tumor[0])
         if not chromosomes <= tumor_sq:
-            sys.stderr.write("WARNING: chromosomes {} are not present in the tumor sample {}\n".format(chromosomes - tumor_sq, tumor))
+            sys.stderr.write("WARNING: chromosomes {} are not present in the tumor sample {}\n"
+                             .format(chromosomes - tumor_sq, tumor))
 
     # Check consistency of chromosome names with the reference
-    if reference is not None:
+    if reference:
+        refdict = "{}.dict".format(reference)
         stdout, stderr = subprocess.Popen("grep -e \"^>\" {}".format(reference), stdout=subprocess.PIPE, shell=True).communicate()
-        if stderr is not None:
+
+        if stderr:
             raise ValueError("Error in reading the reference: {}".format(reference))
         else:
             ref = set(c[1:].strip().split()[0] for c in stdout.strip().split('\n'))
-        if not(chromosomes <= ref):
-            raise ValueError("The given reference cannot be used because the chromosome names are inconsistent!\nChromosomes found in BAF files: {}\nChromosomes with the same name found in reference genome: {}".format(chromosomes, ref))
 
-    return sorted(list(chromosomes), key=sp.numericOrder)
+        if not(chromosomes <= ref):
+            raise ValueError("The given reference cannot be used because the chromosome names are inconsistent!\n"
+                             "Chromosomes found in BAF files: {}\nChromosomes with the same name found in reference "
+                             "genome: {}".format(chromosomes, ref))
+
+    # return sorted(list(chromosomes), key=sp.numericOrder)
+    return natsort.natsorted(list(chromosomes))
 
 
 def getSQNames(samtools, bamfile):
+    '''
+    # Pysam provides a cleaner, safer, somewhat faster way to read the header.
     header, stderr = subprocess.Popen([samtools, "view", "-H", bamfile], stdout=subprocess.PIPE, shell=False).communicate()
     if stderr is not None:
         raise ValueError("The header of the normal-sample BAM cannot be read with samtools!")
+    '''
     names = set()
+    header = pysam.view("-H", bamfile)
+    for line in header.split('\n'):
+        line_list = line.split("\t")
+        if line_list[0] == '@SQ':
+            names.add(line_list[1].split(':')[1])
+    '''
+    # This has to be decoded for python 3.  Better to use Pysam
     for line in header.strip().split('\n'):
         line = line.split()
         if line[0] == '@SQ':
             names.add(line[1].split(':')[1])
+    '''
+
     return names
 
 
 def checkVersions(samtools, bcftools):
     samtools_version, samtools_stderr = subprocess.Popen([samtools, "--version-only"], stdout=subprocess.PIPE, shell=False).communicate()
     bcftools_version, bcftools_stderr = subprocess.Popen([bcftools, "--version-only"], stdout=subprocess.PIPE, shell=False).communicate()
+
     return samtools_version == bcftools_version and samtools_stderr is None and bcftools_stderr is None
 
 

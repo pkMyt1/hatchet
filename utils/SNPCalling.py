@@ -1,18 +1,19 @@
 import os
-import sys
-import shlex
+# import sys
+# import shlex
 import subprocess
 from multiprocessing import Process, Queue, JoinableQueue, Lock, Value
 
 import ProgressBar as pb
-
+import Tool_Box
 
 
 def call(samtools, bcftools, reference, samples, chromosomes, num_workers, q, Q, qual, mincov, dp, E, regions, snplist=None, verbose=False):
     # Define a Lock and a shared value for log printing through ProgressBar
     err_lock = Lock()
     counter = Value('i', 0)
-    progress_bar = pb.ProgressBar(total=len(samples)*len(chromosomes), length=40, lock=err_lock, counter=counter, verbose=verbose)
+    progress_bar = \
+        pb.ProgressBar(total=len(samples)*len(chromosomes), length=40, lock=err_lock, counter=counter, verbose=verbose)
 
     # Establish communication queues
     tasks = JoinableQueue()
@@ -86,24 +87,44 @@ class SNPCaller(Process):
                 self.task_queue.task_done()
                 break
 
-            self.progress_bar.progress(advance=False, msg="{} starts SNP calling on (sample={}, chromosome={})".format(self.name, next_task[1], next_task[2]))
+            self.progress_bar.progress(advance=False, msg="{} starts SNP calling on (sample={}, chromosome={})"
+                                       .format(self.name, next_task[1], next_task[2]))
+
             snps = self.callSNPs(bamfile=next_task[0], samplename=next_task[1], chromosome=next_task[2])
-            self.progress_bar.progress(advance=True, msg="{} ends SNP calling on (sample={}, chromosome={})".format(self.name, next_task[1], next_task[2]))
+            self.progress_bar.progress(advance=True, msg="{} ends SNP calling on (sample={}, chromosome={})"
+                                       .format(self.name, next_task[1], next_task[2]))
             self.task_queue.task_done()
             self.result_queue.put(snps)
+
         return
 
     def callSNPs(self, bamfile, samplename, chromosome):
-        cmd_mpileup = "{} mpileup {} -ugf {} -q {} -Q {} --skip-indels -t INFO/AD,AD,DP".format(self.samtools, bamfile, self.reference, self.q, self.Q)
-        cmd_call = "{} call -vmO u --skip-variants indels --variants-only".format(self.bcftools)
+        # cmd_mpileup = \
+        #     "{} mpileup {} -ugf {} -q {} -Q {} --skip-indels -t INFO/AD,AD,DP"\
+        #     .format(self.samtools, bamfile, self.reference, self.q, self.Q)
+
+        cmd_mpileup = \
+            "{} mpileup {} -O u -f {} -q {} -Q {} --skip-indels -a INFO/AD -d 500000"\
+            .format(self.bcftools, bamfile, self.reference, self.q, self.Q)
+
+        # cmd_call = "{} call -vmO u --skip-variants indels --variants-only".format(self.bcftools)
+        cmd_call = "{} call -m -O u --skip-variants indels --variants-only".format(self.bcftools)
         # cmd_filter = "{} filter -s LowQual -e '%QUAL<{} || DP>{}'".format(self.bcftools, self.qual, self.dp)
-        cmd_query = "{} query -f '%CHROM,%POS,%AD{},%AD{}\n' -i 'AN==2 & AC==1 & %QUAL>={} & DP<={} & SUM(AD)>={}'".format(self.bcftools,"{0}","{1}", self.qual, self.dp, self.mincov)
-        if chromosome is not None:
+
+        cmd_query = "{} query -f '%CHROM,%POS,%AD{},%AD{}\n' -i 'AN==2 & AC==1 & %QUAL>={} & DP<={} & SUM(AD)>={}'"\
+            .format(self.bcftools, "{0}", "{1}", self.qual, self.dp, self.mincov)
+
+        # Tool_Box.debug_messenger("SNP Calling Limited to first 1800 Kb here")
+        Tool_Box.debug_messenger("SNP Calling Limit OFF")
+        if chromosome:
+            # cmd_mpileup += " -r {}:1-1800000".format(chromosome)
             cmd_mpileup += " -r {}".format(chromosome)
-        assert not (self.snplist != None and self.regions != None), "SNP list and regions cannot be both provided!"
-        if self.snplist is not None:
+
+        assert not (self.snplist and self.regions), "SNP list and regions cannot be both provided!"
+
+        if self.snplist:
             cmd_mpileup += " -l {}".format(self.snplist)
-        if self.regions is not None:
+        if self.regions:
             cmd_mpileup += " -l {}".format(self.regions)
         if self.E:
             cmd_mpileup += " -E"
@@ -111,10 +132,16 @@ class SNPCaller(Process):
             err = open("samtools.log", 'a')
         else:
             err = open(os.devnull, 'w')
-        mpileup = subprocess.Popen(shlex.split(cmd_mpileup), stdout=subprocess.PIPE, stderr=err, shell=False)
-        call = subprocess.Popen(shlex.split(cmd_call), stdin=mpileup.stdout, stdout=subprocess.PIPE, stderr=err, shell=False)
-        query = subprocess.Popen(shlex.split(cmd_query), stdin=call.stdout, stdout=subprocess.PIPE, stderr=err, shell=False)
-        stdout, stderr = query.communicate()
+        cmd_mpileup += " | {} | {}".format(cmd_call, cmd_query)
+
+        mpileup = \
+            subprocess.Popen(cmd_mpileup, stdout=subprocess.PIPE, stderr=err, shell=True)
+
+        # call = subprocess.Popen(shlex.split(cmd_call), stdin=mpileup.stdout, stdout=subprocess.PIPE, stderr=err, shell=False)
+
+        # query = subprocess.Popen(shlex.split(cmd_query), stdin=call.stdout, stdout=subprocess.PIPE, stderr=err, shell=False)
+
+        stdout, stderr = mpileup.communicate()
         err.close()
 
-        return [(samplename, el[0], el[1], int(el[2]), int(el[3])) for el in (tuple(line.split(',')) for line in stdout.strip().split('\n') if line != "")]
+        return [(samplename, line.split(',')[0], line.split(',')[1], int(line.split(',')[2]), int(line.split(',')[3])) for line in stdout.decode().strip().split('\n') if line != ""]

@@ -1,11 +1,10 @@
 import os
-import sys
-import shlex
+# import sys
+# import shlex
 import subprocess
 from multiprocessing import Process, Queue, JoinableQueue, Lock, Value
-
+import Tool_Box
 import ProgressBar as pb
-
 
 
 def count(samtools, bcftools, reference, samples, chromosomes, num_workers, q, Q, mincov, dp, E, snplist=None, verbose=False):
@@ -92,25 +91,45 @@ class AlleleCounter(Process):
         return
 
     def countAlleles(self, bamfile, samplename, chromosome):
-        cmd_mpileup = "{} mpileup {} -ugf {} -q {} -Q {} --skip-indels -t INFO/AD,AD,DP".format(self.samtools, bamfile, self.reference, self.q, self.Q)
-        cmd_query = "{} query -f '%CHROM,%POS,%AD{},%AD{}\n' -i 'DP<={} & SUM(AD)>={}'".format(self.bcftools, "{0}", "{1}", self.dp, self.mincov)
-        if chromosome is not None:
+        # cmd_mpileup = \
+        #     "{} mpileup {} -ugf {} -q {} -Q {} --skip-indels -t INFO/AD,AD,DP"\
+        #     .format(self.samtools, bamfile, self.reference, self.q, self.Q)
+
+        cmd_mpileup = \
+            "{} mpileup {} -O u -f {} -q {} -Q {} --skip-indels -a INFO/AD -d 500000"\
+            .format(self.bcftools, bamfile, self.reference, self.q, self.Q)
+
+        cmd_query = \
+            "{} query -f '%CHROM,%POS,%AD{},%AD{}\n' -i 'DP<={} & SUM(AD)>={}'"\
+            .format(self.bcftools, "{0}", "{1}", self.dp, self.mincov)
+
+        # Tool_Box.debug_messenger("Allele Counting Limited to first 1800 Kb here")
+        Tool_Box.debug_messenger("Allele Counting Limit OFF")
+        if chromosome:
+            # cmd_mpileup += " -r {}:1-1800000".format(chromosome)
             cmd_mpileup += " -r {}".format(chromosome)
-        if self.snplist is not None:
-            cmd_mpileup += " -l {}".format(self.snplist)
+
+        if self.snplist:
+            cmd_mpileup += " -T {}".format(self.snplist)
         if self.E:
             cmd_mpileup += " -E"
         if self.verbose:
             err = open("samtools.log", 'a')
         else:
             err = open(os.devnull, 'w')
-        mpileup = subprocess.Popen(shlex.split(cmd_mpileup), stdout=subprocess.PIPE, stderr=err, shell=False)
-        query = subprocess.Popen(shlex.split(cmd_query), stdin=mpileup.stdout, stdout=subprocess.PIPE, stderr=err, shell=False)
-        stdout, stderr = query.communicate()
+
+        cmd_mpileup += " | {}".format(cmd_query)
+
+        mpileup = subprocess.Popen(cmd_mpileup, stdout=subprocess.PIPE, stderr=err, shell=True)
+
+        # mpileup = subprocess.Popen(shlex.split(cmd_mpileup), stdout=subprocess.PIPE, stderr=err, shell=False)
+        # query = subprocess.Popen(shlex.split(cmd_query), stdin=mpileup.stdout, stdout=subprocess.PIPE, stderr=err, shell=False)
+
+        stdout, stderr = mpileup.communicate()
         err.close()
 
-        return [(samplename, el[0], el[1], int(el[2]), int(el[3])) for el in (tuple(line.split(',')) for line in stdout.strip().split('\n') if line != "")]
-
+        # return [(samplename, el[0], el[1], int(el[2]), int(el[3])) for el in (tuple(line.split(',')) for line in stdout.strip().split('\n') if line != "")]
+        return [(samplename, line.split(',')[0], line.split(',')[1], int(line.split(',')[2]), int(line.split(',')[3])) for line in stdout.decode().strip().split('\n') if line != ""]
 
 
 def naiveCount(samtools, samples, chromosomes, num_workers, q, Q, E, snplist=None, verbose=False):
@@ -163,7 +182,6 @@ def naiveCount(samtools, samples, chromosomes, num_workers, q, Q, E, snplist=Non
     return sorted_results
 
 
-
 class NaiveAlleleCounter(Process):
 
     def __init__(self, task_queue, result_queue, progress_bar, samtools, q, Q, E, snplist=None, verbose=False):
@@ -192,10 +210,15 @@ class NaiveAlleleCounter(Process):
             self.result_queue.put(allelecount)
         return
 
-
     def parsePileup(self, bamfile, samplename, chromosome):
         # Creating pileup
-        cmd_mpileup = "{} mpileup {} -q {} -Q {} --skip-indels -t INFO/AD,AD,DP".format(self.samtools, bamfile, self.q, self.Q)
+        # cmd_mpileup =
+        # "{} mpileup {} -q {} -Q {} --skip-indels -t INFO/AD,AD,DP".format(self.samtools, bamfile, self.q, self.Q)
+
+        cmd_mpileup = \
+            "bcftools mpileup {} -O u -q {} -Q {} --skip-indels -a INFO/AD -d 500000" \
+            .format(bamfile, self.q, self.Q)
+
         if chromosome is not None:
             cmd_mpileup += " -r {}".format(chromosome)
         if self.snplist is not None:
@@ -206,26 +229,26 @@ class NaiveAlleleCounter(Process):
             err = open("samtools.log", 'a')
         else:
             err = open(os.devnull, 'w')
-        mpileup = subprocess.Popen(shlex.split(cmd_mpileup), stdout=subprocess.PIPE, stderr=err, shell=False)
+        # mpileup = subprocess.Popen(shlex.split(cmd_mpileup), stdout=subprocess.PIPE, stderr=err, shell=False)
+        mpileup = subprocess.Popen(cmd_mpileup, stdout=subprocess.PIPE, stderr=err, shell=True)
         stdout, stderr = mpileup.communicate()
 
         # Counting alleles
-        return [self.parsePileupRecord(record, samplename) for record in stdout.strip().split('\n') if record != ""]
+        return [self.parsePileupRecord(record, samplename) for record in stdout.decode().strip().split('\n') if record]
 
-
-    def parsePileupRecord(self, record, sample):## , minQuality=0):
+    def parsePileupRecord(self, record, sample):  # , minQuality=0):
         fields = record.strip().split()
         chromosome = fields[0]
         position = fields[1]
         coverage = int(fields[3])
         if coverage == 0:
-            return (sample, chromosome, position, 0, 0, 0, 0, 0)
+            return sample, chromosome, position, 0, 0, 0, 0, 0
 
         bases = fields[4].replace(",", fields[2].lower()).replace(".", fields[2])
         ##qualities = [x-33 for x in map(ord, fields[5])]
         index = 0
         skip = 0
-        counts = {"A" : 0, "T" : 0, "C" : 0, "G" : 0, "+" : 0, "-" : 0}
+        counts = {"A": 0, "T": 0, "C": 0, "G": 0, "+": 0, "-": 0}
 
         for ichar in range(len(bases)):
             if skip == 0:
@@ -237,9 +260,9 @@ class NaiveAlleleCounter(Process):
                 elif char in ("<", ">", "*"):
                     index += 1
                     counts["-"] += 1
-                elif char in ("^"):
+                elif char in "^":
                     skip = 1
-                elif char in ("$"):
+                elif char in "$":
                     skip = 0
                 elif char in ("+", "-"):
                     jump = ""
@@ -258,4 +281,5 @@ class NaiveAlleleCounter(Process):
 
         assert index == coverage
         assert (counts["A"] + counts["T"] + counts["C"] + counts["G"] + counts["-"]) == coverage
-        return (sample, chromosome, position, coverage, counts["A"], counts["T"], counts["C"], counts["G"])
+
+        return sample, chromosome, position, coverage, counts["A"], counts["T"], counts["C"], counts["G"]

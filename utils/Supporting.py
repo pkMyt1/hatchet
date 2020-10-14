@@ -15,11 +15,11 @@ def digits(string):
 
 
 def argmax(d):
-    return max(d, key=(lambda x : d[x]))
+    return max(d, key=(lambda x: d[x]))
 
 
 def argmin(d):
-    return min(d, key=(lambda x : d[x]))
+    return min(d, key=(lambda x: d[x]))
 
 
 def which(program):

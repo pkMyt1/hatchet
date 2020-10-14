@@ -3,9 +3,10 @@ import sys
 import shlex
 import subprocess
 from multiprocessing import Process, Queue, JoinableQueue, Lock, Value
-
 import ProgressBar as pb
 import Supporting as sp
+import pysam
+import Tool_Box
 
 
 def tcount(samtools, samples, chromosomes, num_workers, q, verbose=False):
@@ -57,7 +58,6 @@ def tcount(samtools, samples, chromosomes, num_workers, q, verbose=False):
     return sorted_results
 
 
-
 class TotalCounter(Process):
 
     def __init__(self, task_queue, result_queue, progress_bar, samtools, q, verbose):
@@ -85,6 +85,7 @@ class TotalCounter(Process):
         return
 
     def binChr(self, bamfile, samplename, chromosome):
+        """
         popen = subprocess.Popen
         pipe = subprocess.PIPE
         split = shlex.split
@@ -92,4 +93,10 @@ class TotalCounter(Process):
         stdout, stderr = popen(split(cmd), stdout=pipe, stderr=pipe).communicate()
         if stderr != "":
             self.progress_bar.progress(advance=False, msg="{}{}: samtools warns \"{}\"on (sample={}, chromosome={}){}".format(sp.bcolors.WARNING, self.name, stderr, samplename, chromosome, sp.bcolors.ENDC))
-        return (samplename, chromosome, int(stdout.strip()))
+        """
+
+        bf = pysam.AlignmentFile(bamfile)
+        pcount = bf.count(chromosome, read_callback='all')
+
+        #return (samplename, chromosome, int(stdout.strip()))
+        return samplename, chromosome, pcount

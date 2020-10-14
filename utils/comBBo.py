@@ -1,11 +1,12 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 import sys
 import math
 import copy
 import numpy as np
+from natsort import natsort
 from scipy.stats import beta
-
+import Tool_Box
 import ProgressBar as pb
 import Supporting as sp
 from ArgParsing import parse_combbo_args
@@ -15,34 +16,50 @@ def main():
     sp.log(msg="# Parsing and checking input arguments\n", level="STEP")
     args = parse_combbo_args()
     np.random.seed(seed=args["seed"])
-    sp.log(msg="# Reading and checking the bin count files for computing read-depth ratios\n", level="STEP")
-    normalbins, tumorbins, chromosomes, normal1, samples1 = readBINs(normalbins=args["normalbins"], tumorbins=args["tumorbins"])
-    sp.log(msg="# Reading and checking the allele count files for computing BAF\n", level="STEP")
-    tumorbafs, chromosomes2, samples2, normalbafs, normal2 = readBAFs(tumor=args["tumorbafs"], normal=args["normalbafs"])
-    if normal1 != normal2 and normal2 is not None: raise ValueError(sp.error("The name of normal sample is different in bin counts and allele counts!"))
-    else: normal = normal1
 
-    if samples1 != samples2: raise ValueError(sp.error("The names of tumor samples are different in bin counts and allele counts!"))
-    else: samples = samples1
+    sp.log(msg="# Reading and checking the bin count files for computing read-depth ratios\n", level="STEP")
+
+    normalbins, tumorbins, chromosomes, normal1, samples1 = \
+        readBINs(normalbins=args["normalbins"], tumorbins=args["tumorbins"])
+
+    sp.log(msg="# Reading and checking the allele count files for computing BAF\n", level="STEP")
+    tumorbafs, chromosomes2, samples2, normalbafs, normal2 = \
+        readBAFs(tumor=args["tumorbafs"], normal=args["normalbafs"])
+
+    if normal2 and normal1 != normal2:
+        raise ValueError(sp.error("The name of normal sample is different in bin counts and allele counts!"))
+    else:
+        normal = normal1
+
+    if samples1 != samples2:
+        raise ValueError(sp.error("The names of tumor samples are different in bin counts and allele counts!"))
+    else:
+        samples = samples1
 
     totalcounts = None
-    if args["totalcounts"] is not None:
+    if args["totalcounts"]:
         sp.log(msg="# Reading and checking the total read count files\n", level="STEP")
         totalcounts = readTotalCounts(filename=args["totalcounts"], samples=samples, normal=normal)
 
     sp.log(msg="# Combine the bin and allele counts to obtain BAF and RD for each bin\n", level="STEP")
-    result = combine(normalbins=normalbins, tumorbins=tumorbins, tumorbafs=tumorbafs, normalbafs=normalbafs, diploidbaf=args["diploidbaf"], totalcounts=totalcounts, chromosomes=chromosomes, samples=samples, normal=normal, mode=args["mode"], bafsd=args["bafsd"], gamma=args["gamma"], draws=args["bootstrap"], verbose=args["verbose"], disable=args["disable"])
+    result = \
+        combine(normalbins=normalbins, tumorbins=tumorbins, tumorbafs=tumorbafs, normalbafs=normalbafs,
+                diploidbaf=args["diploidbaf"], totalcounts=totalcounts, chromosomes=chromosomes, samples=samples,
+                normal=normal, mode=args["mode"], bafsd=args["bafsd"], gamma=args["gamma"], draws=args["bootstrap"],
+                verbose=args["verbose"], disable=args["disable"])
 
-    names = list(samples).sort()
+    # names = list(samples).sort()
     sys.stdout.write("#CHR\tSTART\tEND\tSAMPLE\tRD\t#SNPS\tCOV\tALPHA\tBETA\tBAF\n")
     for key in sorted(result, key=(lambda x : (sp.numericOrder(x[0]), int(x[1]), int(x[2])))):
         for sample in result[key]:
-            sys.stdout.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(key[0], key[1], key[2], sample[0], sample[1], sample[2], sample[3], sample[4], sample[5], sample[6]))
+            sys.stdout.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
+                             .format(key[0], key[1], key[2], sample[0], sample[1], sample[2], sample[3], sample[4],
+                                     sample[5], sample[6]))
 
 
 def combine(normalbins, tumorbins, tumorbafs, normalbafs, diploidbaf, totalcounts, chromosomes, samples, normal, mode, draws, bafsd, gamma, verbose=False, disable=False):
     res = {}
-    ctumorbafs = {c : sorted(tumorbafs[c], key=(lambda x : x[1])) for c in tumorbafs}
+    ctumorbafs = {c: sorted(tumorbafs[c], key=(lambda x: x[1])) for c in tumorbafs}
     if not disable: progress_bar = pb.ProgressBar(total=len(tumorbins), length=40, verbose=verbose)
     for bi in sorted(tumorbins, key=(lambda x : (sp.numericOrder(x[0]), int(x[1]), int(x[2])))):
         if bi[0] in ctumorbafs:
@@ -77,16 +94,19 @@ def combine(normalbins, tumorbins, tumorbafs, normalbafs, diploidbaf, totalcount
 
                 # Compute normalizing factor by total number of reads if provided
                 if totalcounts is not None:
-                    totalfactor = {sample : float(totalcounts[normal]) / float(totalcounts[sample])  for sample in samples}
-                    ratios = {sample : float(ratios[sample]) * float(totalfactor[sample]) for sample in samples}
+                    totalfactor = {sample: float(totalcounts[normal]) / float(totalcounts[sample]) for sample in samples}
+                    ratios = {sample: float(ratios[sample]) * float(totalfactor[sample]) for sample in samples}
 
                 # Compute number of SNPs covering each bin and the average coverage
-                snps = {sample : len(tpartition[sample]) for sample in samples}
-                cov = {sample : float(sum(x[2]+x[3] for x in tpartition[sample])) / float(len(tpartition[sample])) for sample in samples}
+                snps = {sample: len(tpartition[sample]) for sample in samples}
+                cov = {sample: float(sum(x[2]+x[3] for x in tpartition[sample])) / float(len(tpartition[sample])) for sample in samples}
 
                 #Compute BAFs
-                records = computeBAFs(mode=mode, partition=tpartition, normal=normalover, diploidbaf=diploidbaf, samples=samples, chro=bi[0], draws=draws, bafsd=bafsd, gamma=gamma)
-                parsed = {record[0] : record for record in records}
+                records = \
+                    computeBAFs(mode=mode, partition=tpartition, normal=normalover, diploidbaf=diploidbaf,
+                                samples=samples, chro=bi[0], draws=draws, bafsd=bafsd, gamma=gamma)
+
+                parsed = {record[0]: record for record in records}
 
                 res[bi] = [(parsed[sample][0], ratios[sample], snps[sample], cov[sample], parsed[sample][1], parsed[sample][2], parsed[sample][3]) for sample in samples]
             else:
@@ -252,6 +272,7 @@ def readBINs(normalbins, tumorbins):
     # Check normal bin counts
     if len(normal) > 1:
         raise ValueError(sp.error("Found multiple samples in normal bin counts!"))
+
     prev_r = -1
     prev_c = -1
     for key in sorted(normalBINs, key=(lambda x : (sp.numericOrder(x[0]), int(x[1]), int(x[2])))):
@@ -295,7 +316,8 @@ def readBINs(normalbins, tumorbins):
     if set(normalBINs) != set(tumorBINs):
         raise ValueError(sp.error("The bins of the normal and tumor samples are different!"))
 
-    chromosomes = sorted(list(normal_chr), key=sp.numericOrder)
+    # chromosomes = sorted(list(normal_chr), key=sp.numericOrder)
+    chromosomes = natsort.natsorted(normal_chr)
 
     return normalBINs, tumorBINs, chromosomes, normal.pop(), samples
 
@@ -412,16 +434,19 @@ def readTotalCounts(filename, samples, normal):
     normalfound = False
     counts = {}
     found = set()
+
     with open(filename, 'r') as f:
         for line in f:
             parsed = line.strip().split()
             if parsed[0] in found:
                 raise ValueError(sp.error("Found multiple total read counts for the same sample {}!".format(parsed[0])))
+
             if parsed[0] == normal:
                 normalfound = True
             else:
                 found.add(parsed[0])
             counts[parsed[0]] = int(parsed[1])
+
     if samples < found:
         raise ValueError(sp.error("Found total read counts for samples that are not present in the input!"))
     elif found < samples:

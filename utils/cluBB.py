@@ -1,11 +1,12 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
-import os, shutil
+import os
+import shutil
 import sys
 import math
-import copy
+# import copy
 import numpy as np
-
+import Tool_Box
 from ArgParsing import parse_clubb_args
 import Supporting as sp
 
@@ -21,45 +22,66 @@ def main():
     points, bintoidx = getPoints(data=combo, samples=samples)
 
     clouds = None
-    if args["cloud"] > 0 :
+    if args["cloud"] > 0:
         sp.log(msg="# Bootstrap each bin for clustering\n", level="STEP")
-        clouds = generateClouds(points=points, density=args["cloud"], seed=args["seed"], sdeven=args["ratiodeviation"], sdodd=args["bafdeviation"])
+        clouds = \
+            generateClouds(points=points, density=args["cloud"], seed=args["seed"], sdeven=args["ratiodeviation"],
+                           sdodd=args["bafdeviation"])
 
     sp.log(msg="# Clustering bins by RD and BAF across tumor samples\n", level="STEP")
-    mus, sigmas, clusterAssignments, numPoints, numClusters = cluster(points=points, output=args["outsegments"], samples=samples, clouds=clouds, K=args["initclusters"], sf=args["tuning"], restarts=args['restarts'], bnpydir=args["bnpydir"])
+    mus, sigmas, clusterAssignments, numPoints, numClusters = \
+        cluster(points=points, output=args["outsegments"], samples=samples, clouds=clouds, K=args["initclusters"],
+                sf=args["tuning"], restarts=args['restarts'], bnpydir=args["bnpydir"])
 
     if args['rdtol'] > 0.0 or args['baftol'] > 0.0:
         sp.log(msg="# Refining clustering using given tolerances\n", level="STEP")
         before = len(set(clusterAssignments))
-        clusterAssignments, numClusters = refineClustering(combo=combo, assign=clusterAssignments, assignidx=bintoidx, samples=samples, rdtol=args['rdtol'], baftol=args['baftol'])
-        sp.log(msg='The number of clusters have been reduced from {} to {} with given tolerances\n'.format(before, numClusters), level='INFO')
+        clusterAssignments, numClusters = \
+            refineClustering(combo=combo, assign=clusterAssignments, assignidx=bintoidx, samples=samples,
+                             rdtol=args['rdtol'], baftol=args['baftol'])
 
-    names = list(samples).sort()
+        sp.log(msg='The number of clusters have been reduced from {} to {} with given tolerances\n'
+               .format(before, numClusters), level='INFO')
+
+    # names = list(samples).sort()
 
     sp.log(msg="# Writing BBC output with resulting clusters\n", level="STEP")
-    if args["outbins"] is None: outbins = sys.stdout
-    else: outbins = open(args["outbins"], 'w')
+    if args["outbins"] is None:
+        outbins = sys.stdout
+    else:
+        outbins = open(args["outbins"], 'w')
+
     outbins.write("#CHR\tSTART\tEND\tSAMPLE\tRD\t#SNPS\tCOV\tALPHA\tBETA\tBAF\tCLUSTER\n")
-    for key in sorted(combo, key=(lambda x : (sp.numericOrder(x[0]), int(x[1]), int(x[2])))):
+    for key in sorted(combo, key=(lambda x: (sp.numericOrder(x[0]), int(x[1]), int(x[2])))):
         for sample in combo[key]:
-            outbins.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(key[0], key[1], key[2], sample[0], sample[1], sample[2], sample[3], sample[4], sample[5], sample[6], clusterAssignments[bintoidx[key]]))
+            outbins.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
+                          .format(key[0], key[1], key[2], sample[0], sample[1], sample[2], sample[3], sample[4],
+                                  sample[5], sample[6], clusterAssignments[bintoidx[key]]))
 
     sp.log(msg="# Segmenting bins\n", level="STEP")
-    clusters = {cluster : set(key for key in combo if clusterAssignments[bintoidx[key]] == cluster) for cluster in set(clusterAssignments)}
+    clusters = {cluster: set(key for key in combo if clusterAssignments[bintoidx[key]] == cluster) for cluster in set(clusterAssignments)}
+
     segments = segmentBins(bb=combo, clusters=clusters, samples=samples)
 
-    if args["diploidbaf"] != None:
-        sp.log(msg="# Determining the largest cluster as diploid or tetraploid and rescaling all the clusters inside the threshold accordingly\n", level="STEP")
+    if args["diploidbaf"]:
+        sp.log(msg="# Determining the largest cluster as diploid or tetraploid and rescale all the clusters inside "
+                   "the threshold accordingly\n", level="STEP")
+
         segments = scaleBAF(segments=segments, samples=samples, diploidbaf=args["diploidbaf"])
 
     sp.log(msg="# Writing REF output with resulting segments\n", level="STEP")
-    if args["outsegments"] is None: outsegments = sys.stdout
-    else: outsegments = open(args["outsegments"], 'w')
+    if not args["outsegments"]:
+        outsegments = sys.stdout
+    else:
+        outsegments = open(args["outsegments"], 'w')
+
     outsegments.write("#ID\tSAMPLE\t#BINS\tRD\t#SNPS\tCOV\tALPHA\tBETA\tBAF\n")
     for key in sorted(segments):
         for sample in segments[key]:
             record = segments[key][sample]
-            outsegments.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(key, sample, record[0], record[1], record[2], record[3], record[4], record[5], record[6]))
+            outsegments.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
+                              .format(key, sample, record[0], record[1], record[2], record[3], record[4], record[5],
+                                      record[6]))
 
 
 def readBB(bbfile):
@@ -92,15 +114,19 @@ def getPoints(data, samples):
     idx = 0
     points = []
     bintoidx = {}
-    for bi in sorted(data, key=(lambda x : (sp.numericOrder(x[0]), int(x[1]), int(x[2])))):
+
+    for bi in sorted(data, key=(lambda x: (sp.numericOrder(x[0]), int(x[1]), int(x[2])))):
         partition = {}
+
         for x in data[bi]:
             if x[0] in partition:
-                raise ValueError(sp.error("Found a bin ({}, {}) in chromosome {} defined multiple times for the same sample!".format(bi[1]. bi[2], bi[0])))
+                raise ValueError(sp.error("Found a bin ({}, {}) in chromosome {} defined multiple times for the same "
+                                          "sample!".format(bi[1], bi[2], bi[0])))
             else:
                 partition[x[0]] = [x[1], x[-1]]
         if len(partition) != len(samples):
-            raise ValueError(sp.error("Found a bin ({}, {}) in chromosome {} that is not covered in all the samples!".format(bi[1]. bi[2], bi[0])))
+            raise ValueError(sp.error("Found a bin ({}, {}) in chromosome {} that is not covered in all the samples!"
+                                      .format(bi[1], bi[2], bi[0])))
         points.append([e for sample in samples for e in partition[sample]])
         bintoidx[bi] = idx
         idx += 1
@@ -133,25 +159,32 @@ def cluster(points, output, samples, clouds=None, K=15, sf=0.01, restarts=10, bn
     os.environ["BNPYOUTDIR"] = tmp
     sys.path.append(bnpydir)
     import bnpy
-    
+
     sp.log(msg="## Clustering...\n", level="INFO")
+
     total = list(points)
-    if clouds is not None:
+
+    if clouds:
         total.extend(list(clouds))
     npArray = np.array(total)
+
     Data = bnpy.data.XData(X=npArray)
     Data.name = "Clustering tumor samples by RD and BAF"
     Data.summary = "Clustering the following samples: {}".format(",".join(samples))
 
     if Data.X.shape[0] < K:
-	K = Data.X.shape[0]
+        K = Data.X.shape[0]
 
     if hasattr(bnpy.learnalg, "MOVBBirthMergeAlg"):
-        hmodel, Info = bnpy.Run.run(Data, 'DPMixtureModel', 'DiagGauss', 'moVB', nLap=100, nTask=restarts, K=K, moves='birth,merge', ECovMat='eye', sF=sf, doWriteStdOut=False)
+        hmodel, Info = bnpy.run(Data, 'DPMixtureModel', 'DiagGauss', 'moVB', nLap=100, nTask=restarts, K=K,
+                                moves='birth,merge', ECovMat='eye', sF=sf, doWriteStdOut=False)
+
     elif hasattr(bnpy.learnalg, "MemoVBMovesAlg"):
-        hmodel, Info = bnpy.Run.run(Data, 'DPMixtureModel', 'DiagGauss', 'memoVB', nLap=100, nTask=restarts, K=K, moves='birth,merge', ECovMat='eye', sF=sf, doWriteStdOut=False)
+        hmodel, Info = bnpy.run(Data, 'DPMixtureModel', 'DiagGauss', 'memoVB', nLap=100, nTask=restarts, K=K,
+                                moves='birth,merge', ECovMat='eye', sF=sf, doWriteStdOut=False)
     else:
-        raise ValueError(sp.error("BNPY learnalg module does not contain either MOVBBirthMergeAlg or MemoVBMovesAlg, please use the right version!"))
+        raise ValueError(sp.error("BNPY learnalg module does not contain either MOVBBirthMergeAlg or MemoVBMovesAlg, "
+                                  "please use the right version!"))
 
     observationModel = hmodel.obsModel
     numClusters = observationModel.K
@@ -168,58 +201,61 @@ def cluster(points, output, samples, clouds=None, K=15, sf=0.01, restarts=10, bn
 
     numPoints = []
     for i in range(numClusters):
-		currX = np.array([Data.X[j] for j in range(len(Data.X)) if fullAssignments[j] == i])
-		numPoints.append(currX.shape[0])
+        currX = np.array([Data.X[j] for j in range(len(Data.X)) if fullAssignments[j] == i])
+        numPoints.append(currX.shape[0])
 
     return mus, sigmas, targetAssignments, numPoints, numClusters
 
 
 def refineClustering(combo, assign, assignidx, samples, rdtol, baftol):
-    assignment = {b : assign[assignidx[b]] for b in combo}
+    assignment = {b: assign[assignidx[b]] for b in combo}
     clusters = set(assignment[b] for b in assignment)
-    size = {c : float(sum(c == assignment[b] for b in combo)) for c in clusters}
-    getbaf = (lambda c, p : float(sum(e[6] for b in combo for e in combo[b] if assignment[b] == c and e[0] == p)))
-    baf = {c : {p : getbaf(c, p) / size[c] for p in samples} for c in clusters}
-    getrdr = (lambda c, p : float(sum(e[1] for b in combo for e in combo[b] if assignment[b] == c and e[0] == p)))
-    rdr = {c : {p : getrdr(c, p) / size[c] for p in samples} for c in clusters}
+    size = {c: float(sum(c == assignment[b] for b in combo)) for c in clusters}
+    getbaf = (lambda c, p: float(sum(e[6] for b in combo for e in combo[b] if assignment[b] == c and e[0] == p)))
+    baf = {c: {p: getbaf(c, p) / size[c] for p in samples} for c in clusters}
+    getrdr = (lambda c, p: float(sum(e[1] for b in combo for e in combo[b] if assignment[b] == c and e[0] == p)))
+    rdr = {c: {p: getrdr(c, p) / size[c] for p in samples} for c in clusters}
 
-    mbaf = (lambda c : {p : baf[c][p] for p in samples})
-    mrdr = (lambda c : {p : rdr[c][p] for p in samples})
-    merge = {c : {'BAF' : mbaf(c), 'RDR' : mrdr(c), 'SIZE' : size[c], 'CLUS' : {c}} for c in clusters}
+    mbaf = (lambda c: {p: baf[c][p] for p in samples})
+    mrdr = (lambda c: {p: rdr[c][p] for p in samples})
+    merge = {c: {'BAF': mbaf(c), 'RDR': mrdr(c), 'SIZE': size[c], 'CLUS': {c}} for c in clusters}
 
     def mergable(m):
-        checkrdr = (lambda f, s : False not in set(abs(m[f]['RDR'][p] - m[s]['RDR'][p]) <= rdtol for p in samples))
-        checkbaf = (lambda f, s : False not in set(abs(m[f]['BAF'][p] - m[s]['BAF'][p]) <= baftol for p in samples))
-        check = (lambda f, s : checkrdr(f, s) and checkbaf(f, s))
-        varrdr = (lambda f, s : sum(abs(m[f]['RDR'][p] - m[s]['RDR'][p]) for p in samples))
-        varbaf = (lambda f, s : sum(abs(m[f]['BAF'][p] - m[s]['BAF'][p]) for p in samples))
-        var = (lambda f, s : varrdr(f, s) + varbaf(f, s))
+        checkrdr = (lambda f, s: False not in set(abs(m[f]['RDR'][p] - m[s]['RDR'][p]) <= rdtol for p in samples))
+        checkbaf = (lambda f, s: False not in set(abs(m[f]['BAF'][p] - m[s]['BAF'][p]) <= baftol for p in samples))
+        check = (lambda f, s: checkrdr(f, s) and checkbaf(f, s))
+        varrdr = (lambda f, s: sum(abs(m[f]['RDR'][p] - m[s]['RDR'][p]) for p in samples))
+        varbaf = (lambda f, s: sum(abs(m[f]['BAF'][p] - m[s]['BAF'][p]) for p in samples))
+        var = (lambda f, s: varrdr(f, s) + varbaf(f, s))
 
-        seq = sorted(m, key=(lambda x : m[x]['SIZE']))
+        seq = sorted(m, key=(lambda x: m[x]['SIZE']))
         for idx, f in enumerate(seq):
-            opts = {s : var(f, s) for s in seq[idx+1:] for p in samples if s != f and check(f, s)}
+            opts = {s: var(f, s) for s in seq[idx+1:] for p in samples if s != f and check(f, s)}
             if len(opts) > 0:
-                first = f
-                break
-        if len(opts) > 0:
-            f = first
-            s = sp.argmin(opts)
-            return first, sp.argmin(opts)
-        else:
-            None
+                return f, sp.argmin(opts)
+                # first = f
+                # break
+        return None
+        # if len(opts) > 0:
+        #     f = first
+        #     s = sp.argmin(opts)
+        #     return first, sp.argmin(opts)
+        # else:
+        #     None
 
     m = mergable(merge)
+
     while m is not None:
         m1 = m[0]
         m2 = m[1]
         tot = float(merge[m1]['SIZE'] + merge[m2]['SIZE'])
-        newbaf = {p : float(merge[m1]['BAF'][p] * merge[m1]['SIZE'] + merge[m2]['BAF'][p] * merge[m2]['SIZE']) / tot for p in samples}
-        newrdr = {p : float(merge[m1]['RDR'][p] * merge[m1]['SIZE'] + merge[m2]['RDR'][p] * merge[m2]['SIZE']) / tot for p in samples}
+        newbaf = {p: float(merge[m1]['BAF'][p] * merge[m1]['SIZE'] + merge[m2]['BAF'][p] * merge[m2]['SIZE']) / tot for p in samples}
+        newrdr = {p: float(merge[m1]['RDR'][p] * merge[m1]['SIZE'] + merge[m2]['RDR'][p] * merge[m2]['SIZE']) / tot for p in samples}
         newclu = merge[m1]['CLUS'] | merge[m2]['CLUS']
-        merge = {c : merge[c] for c in merge if c != m1 and c != m2}
+        merge = {c: merge[c] for c in merge if c != m1 and c != m2}
         if len(merge) == 0:
             merge = {}
-        merge[m1] = {'BAF' : newbaf, 'RDR' : newrdr, 'SIZE' : tot, 'CLUS' : newclu}
+        merge[m1] = {'BAF': newbaf, 'RDR': newrdr, 'SIZE': tot, 'CLUS': newclu}
         m = mergable(merge)
 
     newassign = [-1 for i in range(len(assign))]
@@ -236,7 +272,8 @@ def generateClouds(points, density, seed, sdeven=0.02, sdodd=0.02):
     res = []
     resappend = res.append
     for point in points:
-        np.random.seed(seed=seed)
+        # np.random.seed(seed=seed)
+        np.random.seed(seed)
         for d in range(density):
             normal = np.random.normal
             newpoint = [normal(point[i], sdeven) if i%2==0 else normal(point[i], sdodd) for i in range(len(point))]
@@ -245,37 +282,44 @@ def generateClouds(points, density, seed, sdeven=0.02, sdodd=0.02):
 
 
 def segmentBins(bb, clusters, samples):
-    sbb = {bi : {record[0] : record[1:] for record in bb[bi]} for bi in bb}
-    nbins = {cluster : {sample : len(clusters[cluster])  for sample in samples}  for cluster in clusters}
-    rd = {cluster : {sample : float(sum(sbb[bi][sample][0] for bi in clusters[cluster])) / float(len(clusters[cluster])) for sample in samples} for cluster in clusters}
-    nsnps = {cluster : {sample : sum(sbb[bi][sample][1] for bi in clusters[cluster]) for sample in samples} for cluster in clusters}
-    cov = {cluster : {sample : float(sum(sbb[bi][sample][2] for bi in clusters[cluster])) / float(len(clusters[cluster])) for sample in samples} for cluster in clusters}
+    sbb = {bi: {record[0]: record[1:] for record in bb[bi]} for bi in bb}
+    nbins = {cluster: {sample: len(clusters[cluster]) for sample in samples} for cluster in clusters}
+    rd = {cluster: {sample: float(sum(sbb[bi][sample][0] for bi in clusters[cluster])) / float(len(clusters[cluster])) for sample in samples} for cluster in clusters}
+    nsnps = {cluster: {sample: sum(sbb[bi][sample][1] for bi in clusters[cluster]) for sample in samples} for cluster in clusters}
+    cov = {cluster: {sample: float(sum(sbb[bi][sample][2] for bi in clusters[cluster])) / float(len(clusters[cluster])) for sample in samples} for cluster in clusters}
+
     return minSegmentBins(sbb, nbins, rd, nsnps, cov, clusters, samples)
 
 
 def minSegmentBins(sbb, nbins, rd, nsnps, cov, clusters, samples):
-    alpha = {cluster : {sample : sum(min(sbb[bi][sample][3], sbb[bi][sample][4]) for bi in clusters[cluster]) for sample in samples} for cluster in clusters}
-    beta = {cluster : {sample : sum(max(sbb[bi][sample][3], sbb[bi][sample][4]) for bi in clusters[cluster]) for sample in samples} for cluster in clusters}
-    mean = {cluster : {sample : float(alpha[cluster][sample]) / float(alpha[cluster][sample]+beta[cluster][sample]) for sample in samples} for cluster in clusters}
-    return {cluster : {sample : (nbins[cluster][sample], rd[cluster][sample], nsnps[cluster][sample], cov[cluster][sample], alpha[cluster][sample], beta[cluster][sample], mean[cluster][sample]) for sample in samples} for cluster in clusters}
+    alpha = {cluster: {sample: sum(min(sbb[bi][sample][3], sbb[bi][sample][4]) for bi in clusters[cluster]) for sample in samples} for cluster in clusters}
+    beta = {cluster: {sample: sum(max(sbb[bi][sample][3], sbb[bi][sample][4]) for bi in clusters[cluster]) for sample in samples} for cluster in clusters}
+    mean = {cluster: {sample: float(alpha[cluster][sample]) / float(alpha[cluster][sample]+beta[cluster][sample]) for sample in samples} for cluster in clusters}
+
+    return {cluster: {sample: (nbins[cluster][sample], rd[cluster][sample], nsnps[cluster][sample], cov[cluster][sample], alpha[cluster][sample], beta[cluster][sample], mean[cluster][sample]) for sample in samples} for cluster in clusters}
 
 
 def scaleBAF(segments, samples, diploidbaf):
+
     diploid = -1
     main = -1
     for key in segments:
-        if sum( (0.5 - segments[key][sample][-1]) <= diploidbaf for sample in samples) == len(samples):
+        if sum((0.5 - segments[key][sample][-1]) <= diploidbaf for sample in samples) == len(samples):
             sample = list(samples)[0]
             if main < segments[key][sample][0]:
                 main = segments[key][sample][0]
                 diploid = key
+
     if diploid == -1:
-        raise ValueError(sp.error("No potential neutral cluster has been found within the given threshold {}!".format(diploidbaf)))
-    scalings = {sample : segments[diploid][sample][-1] for sample in samples}
-    scale = (lambda value, scale, diploidbaf : min( (float(value) / float(scale)) * 0.5, 0.5) if (0.5-value) <= diploidbaf and scale > 0 else value)
-    scaledBAF = {segment : {sample : scale(segments[segment][sample][-1], scalings[sample], diploidbaf) for sample in samples} for segment in segments}
-    regulate = (lambda record, baf : record[:-3] + splitBAF(baf, record[-3] + record[-2]) + (baf,) if record[-1] != baf else record )
-    return {segment : {sample : regulate(segments[segment][sample], scaledBAF[segment][sample]) for sample in samples} for segment in segments}
+        raise ValueError(sp.error("No potential neutral cluster has been found within the given threshold {}!"
+                                  .format(diploidbaf)))
+
+    scalings = {sample: segments[diploid][sample][-1] for sample in samples}
+    scale = (lambda value, scale, diploidbaf: min((float(value) / float(scale)) * 0.5, 0.5) if (0.5-value) <= diploidbaf and scale > 0 else value)
+    scaledBAF = {segment: {sample: scale(segments[segment][sample][-1], scalings[sample], diploidbaf) for sample in samples} for segment in segments}
+    regulate = (lambda record, baf: record[:-3] + splitBAF(baf, record[-3] + record[-2]) + (baf,) if record[-1] != baf else record )
+
+    return {segment: {sample: regulate(segments[segment][sample], scaledBAF[segment][sample]) for sample in samples} for segment in segments}
 
 
 def splitBAF(baf, scale):
@@ -288,11 +332,13 @@ def splitBAF(baf, scale):
     roundings.append((int(math.floor(BAF * SUM)), int(math.ceil((1.0 - BAF) * SUM))))
     roundings.append((int(math.ceil(BAF * SUM)), int(math.floor((1.0 - BAF) * SUM))))
     roundings.append((int(math.ceil(BAF * SUM)), int(math.ceil((1.0 - BAF) * SUM))))
-    roundings = [(int(min(a,b)), int(max(a,b))) for (a, b) in roundings]
+
+    roundings = [(int(min(a, b)), int(max(a, b))) for (a, b) in roundings]
 
     estimations = [float(a) / float(a+b) if a+b>0 else 1.0 for (a, b) in roundings]
     diff = [abs(est - BAF) for est in estimations]
     best = np.argmin(diff)
+
     return roundings[best][0], roundings[best][1]
 
 
@@ -311,6 +357,7 @@ def roundAlphasBetas(baf, alpha, beta):
 
     estimations = [float(a) / float(a+b) if a+b>0 else 1.0 for (a, b) in roundings]
     diff = [abs(est - BAF) for est in estimations]
+
     return roundings[np.argmin(diff)]
 
 

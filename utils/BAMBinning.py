@@ -3,16 +3,19 @@ import sys
 import shlex
 import subprocess
 from multiprocessing import Process, Queue, JoinableQueue, Lock, Value
-
 import ProgressBar as pb
 import Supporting as sp
+import Tool_Box
+import pysam
 
 
 def bin(samtools, samples, chromosomes, num_workers, q, size, regions, verbose=False):
     # Define a Lock and a shared value for log printing through ProgressBar
     err_lock = Lock()
     counter = Value('i', 0)
-    progress_bar = pb.ProgressBar(total=len(samples)*len(chromosomes), length=40, lock=err_lock, counter=counter, verbose=verbose)
+
+    progress_bar = pb.ProgressBar(total=len(samples)*len(chromosomes), length=40, lock=err_lock, counter=counter,
+                                  verbose=verbose)
 
     # Establish communication queues
     tasks = JoinableQueue()
@@ -21,12 +24,13 @@ def bin(samtools, samples, chromosomes, num_workers, q, size, regions, verbose=F
     # Enqueue jobs
     jobs_count = 0
     for bam in samples:
-        for chro in chromosomes:
-            tasks.put((bam[0], bam[1], chro))
+        for chrom in chromosomes:
+            tasks.put((bam[0], bam[1], chrom))
             jobs_count += 1
 
     # Setting up the workers
-    workers = [Binner(tasks, results, progress_bar, samtools, q, size, regions, verbose) for i in range(min(num_workers, jobs_count))]
+    workers = \
+        [Binner(tasks, results, progress_bar, samtools, q, size, regions, verbose) for i in range(min(num_workers, jobs_count))]
 
     # Add a poison pill for each worker
     for i in range(len(workers)):
@@ -55,7 +59,6 @@ def bin(samtools, samples, chromosomes, num_workers, q, size, regions, verbose=F
         w.join()
 
     return sorted_results
-
 
 
 class Binner(Process):
@@ -89,19 +92,25 @@ class Binner(Process):
     def binChr(self, bamfile, samplename, chromosome):
         bins = []
         append = bins.append
-        popen = subprocess.Popen
-        pipe = subprocess.PIPE
-        split = shlex.split
+        # popen = subprocess.Popen
+        # pipe = subprocess.PIPE
+        # split = shlex.split
         cmd = "{} view {} -c -q {}".format(self.samtools, bamfile, self.q)
+        bf = pysam.AlignmentFile(bamfile)
         for reg in self.regions[chromosome]:
             index = reg[0]
             end = reg[1]
             while index < end:
                 border = min(index+self.size, end)
+                '''
                 cmd_reg = cmd + " {}:{}-{}".format(chromosome, index, border)
                 stdout, stderr = popen(split(cmd_reg), stdout=pipe, stderr=pipe).communicate()
                 if stderr != "":
                     self.progress_bar.progress(advance=False, msg="{}{}: samtools warns \"{}\"on (sample={}, chromosome={}, region=({},{})){}".format(sp.bcolors.WARNING, self.name, stderr, samplename, chromosome, index, border, sp.bcolors.ENDC))
                 append((samplename, chromosome, index, border, stdout.strip()))
+                '''
+                append((samplename, chromosome, index, border, bf.count(chromosome, index, border, read_callback='all')))
+
                 index += self.size
+
         return bins
